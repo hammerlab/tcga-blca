@@ -6,6 +6,7 @@ import pandas as pd
 import io
 import numpy as np
 import tempfile
+import xmltodict
 
 ## -- GIVEN -- :
 ## location of token authorizing download
@@ -30,6 +31,7 @@ VALID_CATEGORIES = [
  "Biospecimen",
  "Clinical",
 ]
+VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 
 ## -- DO -- :
 ## 1. generate manifest / list of files to download
@@ -40,7 +42,7 @@ VALID_CATEGORIES = [
 
 #### ---- generate manifest / list of files to download ---- 
 
-def _construct_filter_params(project_name, data_categories):
+def _construct_filter_params(project_name, data_categories, data_format=None):
     """ construct filter-json given project name & files requested
     """
     filt_project = {"op": "in",
@@ -55,10 +57,20 @@ def _construct_filter_params(project_name, data_categories):
                 "value": data_categories
             }
     }
+    if data_format:
+        filt_data_format = {"op": "in",
+                "content": {
+                    "field": "files.data_format",
+                    "value": data_format
+                }
+        }
+    else:
+        filt_data_format=None
     filt = {"op": "and",
             "content": [
                 filt_project,
                 filt_data_category,
+                filt_data_format,
                 ]}
     return filt
 
@@ -69,47 +81,72 @@ def _compute_start_given_page(page, size):
     return (page*size+1)
 
 
-def _construct_parameters(project_name, data_categories, size):
+def _construct_parameters(project_name, data_categories, size, data_type=None):
     """ Construct query parameters given project name & list of data categories
     """
-    _verify_categories(data_categories=data_categories, valid_categories=VALID_CATEGORIES)
+    _verify_field_values(data_list=data_categories, field_name='data_category', endpoint_name='files')
     filt = _construct_filter_params(project_name=project_name, data_categories=data_categories)
     params = {
         'filters': json.dumps(filt),
         'size': size,
-        'sort': 'file_name:asc'
+        'sort': 'file_name:asc',
         }
     return params
 
 
-def _list_valid_options(element, project_name):
-    """ List valid options for a field. Unfortunately requires summarizing data.
-        (currently times out)
+def _list_valid_fields(endpoint_name='files'):
+    """ List allowable fields for this endpoint
     """
-    #  according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
-    endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    filt_project = {"op": "in",
-        "content": {
-            "field": "cases.project.project_id",
-            "value": [project_name]
+    _verify_data_list(data_list=[endpoint_name], allowed_values=VALID_ENDPOINTS)
+    endpoint = GDC_API_ENDPOINT.format(endpoint=endpoint_name)+'/_mapping'
+    response = requests.get(endpoint)
+    field_names = response.json()['_mapping'].keys()
+    return field_names
+
+
+def _list_valid_options(field_name, endpoint_name='files', project_name=None):
+    """ List valid options (values) for a field.
+    """
+    # according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
+    # this is the best way to query the endpoint for values
+    endpoint = GDC_API_ENDPOINT.format(endpoint=endpoint_name)
+    if project_name:
+        filt_project = {"op": "in",
+            "content": {
+                "field": "cases.project.project_id",
+                "value": [project_name]  ## for performance reasons, filter to a project
+            }
         }
-    }
+    else:
+        filt_project=None
     params = {'filters': json.dumps(filt_project),
-              'facets': element,
+              'facets': field_name,
               'size': 0}
     response = requests.get(endpoint, params=params)
-    ## TODO parse response. For now, return json
-    return response.json()
+    response.raise_for_status()
+    try:
+        items = [item['key'] for item in response.json()['data']['aggregations'][field_name]['buckets']]
+    except:
+        raise ValueError('Error parsing returned object: {}'.format(response.json()['warnings']))
+    return items
 
-def _verify_categories(data_categories, valid_categories=VALID_CATEGORIES):
-    """ Verify that each element in a given list of categories is valid. 
-        Can be used for any list, not just data_categories.
+
+def _verify_field_values(data_list, field_name, endpoint_name, project_name=None):
+    """ Verify that each element in a given list is among the allowed_values 
+        for that field/endpoint (& optionally for that project)
     """ 
-    if not(all(cat in valid_categories for cat in data_categories)):
+    valid_options = _list_valid_options(field_name=field_name, endpoint_name=endpoint_name, project_name=project_name)
+    return _verify_data_list(data_list=data_list, allowed_values=valid_options)
+
+
+def _verify_data_list(data_list, allowed_values, message='At least one value given was invalid'):
+    """ Verify that each element in a given list is among the allowed_values. 
+    """ 
+    if not(all(el in allowed_values for el in data_list)):
         ## identify invalid categories for informative error message
-        bad_cats = list()
-        [bad_cats.append(cat) for cat in data_categories if not(cat in valid_categories)]
-        raise ValueError('At least one category given was invalid: {}'.format(', '.join(bad_cats)))
+        bad_values = list()
+        [bad_values.append(el) for el in data_list if not(el in allowed_values)]
+        raise ValueError('{message}: {bad_values}'.format(', '.join(bad_values=bad_values, message=message)))
     return True
 
 
@@ -132,7 +169,7 @@ def _query_manifest_once(project_name, data_categories, size, page=0):
     extra_params = {
         'return_type': 'manifest',
         'from': from_param,
-        'sort': 'file_name:asc'
+        'sort': 'file_name:asc',
         }
     # requests URL-encodes automatically
     response = requests.get(endpoint, params=dict(params, **extra_params))
@@ -224,3 +261,23 @@ def verify_download(manifest_file, data_dir = os.getcwd()):
 
 #### ---- transform downloaded files to Cohorts-friendly format ----
 
+
+def _parse_tcga_clinical(xml_file_path, project_name='TCGA-BLCA'):
+    """ Parse incoming TCGA data; return dict suitable to be processed into a Pandas dataframe
+    """
+    # read document
+    with open(xml_file_path) as fd:
+        doc = xmltodict.parse(fd.read())
+
+    # identify study-prefix, given project_name
+    study_prefix = project_name.lower().replace('tcga-','')
+    # identify head-node, in case name changes
+    head_node_search_pattern = '{prefix}:tcga'.format(prefix=study_prefix)
+    head_node = [key for key in doc.keys() if key.contains(head_node_search_pattern)]
+    if (len(head_node) != 1):
+        raise ValueError('Head node ({head}) could not be identified. Candidate keys include: {keys} '.format(head=head_node_search_pattern, keys=','.split(doc.keys())))
+    # identify data elements to extract
+    # should be a dict structured as {'field_name': ['node1','node2', ...]}
+    data_elements = {'field_name'}
+    data_elements = doc['{prefix}:tcga_bcr'.format(prefix=study_prefix)]['{prefix}:patient'.format(prefix=study_prefix)]
+    return doc

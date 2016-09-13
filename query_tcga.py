@@ -185,7 +185,7 @@ def _get_manifest_data(manifest_file):
 def _verify_download_single_file(row, data_dir=os.getcwd()):
     """ Verify that the file indicated in the manifest exists in data_dir 
     """
-    file_name = os.path.join(row['id'], row['filename'])
+    file_name = os.path.join(data_dir, row['id'], row['filename'])
     return os.path.exists(file_name)
 
 

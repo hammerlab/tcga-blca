@@ -42,7 +42,7 @@ VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 
 #### ---- generate manifest / list of files to download ---- 
 
-def _construct_filter_params(project_name, data_categories, data_format=None):
+def _construct_filter_params(project_name, **kwargs):
     """ construct filter-json given project name & files requested
     """
     filt_project = {"op": "in",
@@ -51,29 +51,34 @@ def _construct_filter_params(project_name, data_categories, data_format=None):
                 "value": [project_name]
             }
     }
-    filt_data_category = {"op": "in",
-            "content": {
-                "field": "files.data_category",
-                "value": data_categories
-            }
-    }
-    if data_format:
-        filt_data_format = {"op": "in",
+
+    content_filters = list(filt_project)
+    query_params = dict(**kwargs)
+    for item in query_params:
+        _verify_field_values(data_list=_convert_to_list(query_params[item]), field_name=item, endpoint_name='files')
+        next_filter = {"op": "in",
                 "content": {
-                    "field": "files.data_format",
-                    "value": data_format
+                    "field": "files.{key}".format(key=item),
+                    "value": _convert_to_list(query_params[item])
                 }
         }
-    else:
-        filt_data_format=None
+        content_filters.append(next_filter)
     filt = {"op": "and",
-            "content": [
-                filt_project,
-                filt_data_category,
-                filt_data_format,
-                ]}
+            "content": content_filters}
     return filt
 
+
+def _convert_to_list(x):
+    """ Convert x to a list if not already a list 
+    """
+    if not(x):
+        return(None)
+    elif isinstance(x, list):
+        return(x)
+    elif isinstance(x, str):
+        return([x])
+    else:
+        return(list(x))
 
 def _compute_start_given_page(page, size):
     """ compute start / from position given page & size
@@ -81,17 +86,20 @@ def _compute_start_given_page(page, size):
     return (page*size+1)
 
 
-def _construct_parameters(project_name, data_categories, size, data_type=None):
+def _construct_parameters(project_name, size, data_format=None, **kwargs):
     """ Construct query parameters given project name & list of data categories
     """
-    _verify_field_values(data_list=data_categories, field_name='data_category', endpoint_name='files')
-    filt = _construct_filter_params(project_name=project_name, data_categories=data_categories)
+    filt = _construct_filter_params(project_name=project_name, **kwargs)
     params = {
         'filters': json.dumps(filt),
-        'size': size,
-        'sort': 'file_name:asc',
+        'size': size
         }
     return params
+
+
+def _search_for_field(search_string, endpoint_name='files'):
+    fields = _list_valid_fields(endpoint_name=endpoint_name)
+    return [field for field in fields if field.find(search_string)>0]
 
 
 def _list_valid_fields(endpoint_name='files'):
@@ -100,7 +108,11 @@ def _list_valid_fields(endpoint_name='files'):
     _verify_data_list(data_list=[endpoint_name], allowed_values=VALID_ENDPOINTS)
     endpoint = GDC_API_ENDPOINT.format(endpoint=endpoint_name)+'/_mapping'
     response = requests.get(endpoint)
-    field_names = response.json()['_mapping'].keys()
+    response.raise_for_status()
+    try:
+        field_names = response.json()['_mapping'].keys()
+    except:
+        _raise_error_parsing_result(response)
     return field_names
 
 
@@ -127,7 +139,7 @@ def _list_valid_options(field_name, endpoint_name='files', project_name=None):
     try:
         items = [item['key'] for item in response.json()['data']['aggregations'][field_name]['buckets']]
     except:
-        raise ValueError('Error parsing returned object: {}'.format(response.json()['warnings']))
+        _raise_error_parsing_result(response)
     return items
 
 
@@ -150,21 +162,32 @@ def _verify_data_list(data_list, allowed_values, message='At least one value giv
     return True
 
 
-def _query_num_pages(project_name, data_categories, size):
+def _raise_error_parsing_result(response):
+    try:
+        raise ValueError('Error parsing returned object: {}'.format(response.json()['warnings']))
+    except:
+        raise ValueError('Server responded with: {}'.format(response.json()))
+
+
+def _query_num_pages(project_name, size, **kwargs):
     """ Get total number of pages for given criteria
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    params = _construct_parameters(project_name=project_name, data_categories=data_categories, size=size)
+    params = _construct_parameters(project_name=project_name, size=size, **kwargs)
     response = requests.get(endpoint, params=params)
-    pages = response.json()['data']['pagination']['pages']
+    response.raise_for_status()
+    try:
+        pages = response.json()['data']['pagination']['pages']
+    except:
+        _raise_error_parsing_result(response)
     return pages
 
 
-def _query_manifest_once(project_name, data_categories, size, page=0):
+def _query_manifest_once(project_name, size, page=0, **kwargs):
     """ Single query for manifest of files matching project_name & categories
     """ 
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    params = _construct_parameters(project_name=project_name, data_categories=data_categories, size=size)
+    params = _construct_parameters(project_name=project_name, size=size, **kwargs)
     from_param = _compute_start_given_page(page=page, size=size)
     extra_params = {
         'return_type': 'manifest',
@@ -173,19 +196,18 @@ def _query_manifest_once(project_name, data_categories, size, page=0):
         }
     # requests URL-encodes automatically
     response = requests.get(endpoint, params=dict(params, **extra_params))
-    if response.status_code != 200:
-        raise ValueError('Error querying API: {} (status_code: {})'.format(response.text, response.status_code))
+    response.raise_for_status()
     return response
 
 
-def query_manifest(project_name, data_categories=['Clinical'], size=100, pages=None):
+def query_manifest(project_name, size=100, pages=None, **kwargs):
     """ Query for all results matching project_name & categories
     """
     output = io.StringIO()
     if not(pages):
-        pages = _query_num_pages(project_name=project_name, data_categories=data_categories, size=size)
+        pages = _query_num_pages(project_name=project_name, size=size, **kwargs)
     for page in np.arange(pages):
-        response = _query_manifest_once(project_name=project_name, data_categories=data_categories, page=page, size=size)
+        response = _query_manifest_once(project_name=project_name, page=page, size=size, **kwargs)
         response_text = response.text.splitlines()
         if page>0:
             del response_text[0]
@@ -203,7 +225,8 @@ def _mkdir_if_not_exists(dir):
             if not(os.path.exists(sub_dir)):
                 os.mkdir(sub_dir)
 
-def download_files(project_name, data_categories=['Clinical'], page_size=100, max_pages=None, data_dir=GDC_DATA_DIR):
+
+def download_clinical_files(project_name, data_categories=['Clinical'], data_format='TSV', page_size=100, max_pages=None, data_dir=GDC_DATA_DIR, *kwargs):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -211,8 +234,8 @@ def download_files(project_name, data_categories=['Clinical'], page_size=100, ma
     """
     _mkdir_if_not_exists(data_dir)
     manifest_contents = query_manifest(project_name=project_name,
-                                       data_categories=data_categories,
-                                       size=page_size, pages=max_pages)
+                                       data_categories=data_categories, data_format=data_format,
+                                       size=page_size, pages=max_pages, **kwargs)
     manifest_file = tempfile.NamedTemporaryFile()
     try:
         # write manifest contents to disk
@@ -232,7 +255,7 @@ def download_files(project_name, data_categories=['Clinical'], page_size=100, ma
 
 #### ---- verify downloaded files ---- 
 
-def _get_manifest_data(manifest_file):
+def _read_manifest_data(manifest_file):
     """ Read file contents into pandas dataframe
     """
     manifest_data = pd.read_table(manifest_file, sep='\t')
@@ -246,10 +269,10 @@ def _verify_download_single_file(row, data_dir=os.getcwd()):
     return os.path.exists(file_name)
 
 
-def verify_download(manifest_file, data_dir = os.getcwd()):
+def verify_download(manifest_file, data_dir=os.getcwd()):
     """ Verify that files listed in the manifest exist in data_dir
     """
-    manifest_data = _get_manifest_data(manifest_file)
+    manifest_data = _read_manifest_data(manifest_file)
     verification = manifest_data.apply(lambda row: _verify_download_single_file(row, data_dir=data_dir), axis=1)
     if (all(verification)):
         return True
@@ -278,6 +301,5 @@ def _parse_tcga_clinical(xml_file_path, project_name='TCGA-BLCA'):
         raise ValueError('Head node ({head}) could not be identified. Candidate keys include: {keys} '.format(head=head_node_search_pattern, keys=','.split(doc.keys())))
     # identify data elements to extract
     # should be a dict structured as {'field_name': ['node1','node2', ...]}
-    data_elements = {'field_name'}
-    data_elements = doc['{prefix}:tcga_bcr'.format(prefix=study_prefix)]['{prefix}:patient'.format(prefix=study_prefix)]
-    return doc
+    data_elements = doc[head_node[0]]['{prefix}:patient'.format(prefix=study_prefix)]
+    return data_elements

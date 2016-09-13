@@ -17,6 +17,8 @@ GDC_API_ENDPOINT = 'https://gdc-api.nci.nih.gov/{endpoint}'
 ## name of cohort to query
 # given as parameter
 # example: 'TCGA-BLCA'
+## location to download files to
+GDC_DATA_DIR='data/gdc'
 ## which types of files to retrieve
 # parameter value. defaults to ['Clinical']
 VALID_CATEGORIES = [
@@ -136,12 +138,21 @@ def query_manifest(project_name, data_categories=['Clinical'], size=100, pages=N
 
 #### ---- download files ---- 
 
-def download_files(project_name, data_categories=['Clinical'], page_size=100, max_pages=None):
+def _mkdir_if_not_exists(dir):
+    if not(os.path.exists(dir)):
+        sub_dir = ''
+        for dir_name in os.path.split(dir):
+            sub_dir = os.path.join(sub_dir, dir_name)
+            if not(os.path.exists(sub_dir)):
+                os.mkdir(sub_dir)
+
+def download_files(project_name, data_categories=['Clinical'], page_size=100, max_pages=None, data_dir=GDC_DATA_DIR):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
         3. Verify that files downloaded as expected
     """
+    _mkdir_if_not_exists(data_dir)
     manifest_contents = query_manifest(project_name=project_name,
                                        data_categories=data_categories,
                                        size=page_size, pages=max_pages)
@@ -153,10 +164,10 @@ def download_files(project_name, data_categories=['Clinical'], page_size=100, ma
         # call gdc-client to download contents
         # {gdc_client} download -m {manifest_file} -t {auth_token}
         exe_bash = [GDC_CLIENT_PATH, 'download', '-m', manifest_file.name, '-t', GDC_TOKEN_PATH]
-        if subprocess.check_call(exe_bash):
-            subprocess.call(exe_bash)
+        if subprocess.check_call(exe_bash, cwd=data_dir):
+            subprocess.call(exe_bash, cwd=data_dir)
         # Verify contents have been downloaded
-        verify_download(manifest_file.name)
+        verify_download(manifest_file.name, data_dir=data_dir)
     finally:
         manifest_file.close()  
     return True

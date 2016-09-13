@@ -226,7 +226,7 @@ def _mkdir_if_not_exists(dir):
                 os.mkdir(sub_dir)
 
 
-def download_clinical_files(project_name, data_categories=['Clinical'], data_format='TSV', page_size=100, max_pages=None, data_dir=GDC_DATA_DIR, *kwargs):
+def download_clinical_files(project_name, data_category=['Clinical'], data_format='TSV', page_size=100, max_pages=None, data_dir=GDC_DATA_DIR, *kwargs):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -234,7 +234,7 @@ def download_clinical_files(project_name, data_categories=['Clinical'], data_for
     """
     _mkdir_if_not_exists(data_dir)
     manifest_contents = query_manifest(project_name=project_name,
-                                       data_categories=data_categories, data_format=data_format,
+                                       data_category=data_categories, data_format=data_format,
                                        size=page_size, pages=max_pages, **kwargs)
     manifest_file = tempfile.NamedTemporaryFile()
     try:

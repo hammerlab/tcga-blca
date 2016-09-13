@@ -82,14 +82,34 @@ def _construct_parameters(project_name, data_categories, size):
     return params
 
 
+def _list_valid_options(element, project_name):
+    """ List valid options for a field. Unfortunately requires summarizing data.
+        (currently times out)
+    """
+    #  according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
+    endpoint = GDC_API_ENDPOINT.format(endpoint='files')
+    filt_project = {"op": "in",
+        "content": {
+            "field": "cases.project.project_id",
+            "value": [project_name]
+        }
+    }
+    params = {'filters': json.dumps(filt_project),
+              'facets': element,
+              'size': 0}
+    response = requests.get(endpoint, params=params)
+    ## TODO parse response. For now, return json
+    return response.json()
+
 def _verify_categories(data_categories, valid_categories=VALID_CATEGORIES):
-    """ Verify that given list of categories is valid
+    """ Verify that each element in a given list of categories is valid. 
+        Can be used for any list, not just data_categories.
     """ 
     if not(all(cat in valid_categories for cat in data_categories)):
         ## identify invalid categories for informative error message
         bad_cats = list()
         [bad_cats.append(cat) for cat in data_categories if not(cat in valid_categories)]
-        raise ValueError('At least one category given was invalid: {}'.format(','.join(bad_cats)))
+        raise ValueError('At least one category given was invalid: {}'.format(', '.join(bad_cats)))
     return True
 
 

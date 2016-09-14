@@ -44,6 +44,17 @@ VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 
 def _construct_filter_parameters(project_name, **kwargs):
     """ construct filter-json given project name & files requested
+    
+    Examples
+    -----------
+
+    >>> _construct_filter_parameters(project_name='TCGA-BLCA', data_category='Clinical')
+    {'content': [
+        {'content': {'field': 'cases.project.project_id', 'value': ['TCGA-BLCA']}, 'op': 'in'},
+        {'content': {'field': 'files.data_category', 'value': ['Clinical']}, 'op': 'in'}
+        ],
+        'op': 'and'}
+    
     """
     filt_project = {"op": "in",
             "content": {
@@ -52,7 +63,7 @@ def _construct_filter_parameters(project_name, **kwargs):
             }
     }
 
-    content_filters = list(filt_project)
+    content_filters = [filt_project]
     query_params = dict(**kwargs)
     for item in query_params:
         _verify_field_values(data_list=_convert_to_list(query_params[item]), field_name=item, endpoint_name='files')
@@ -64,12 +75,24 @@ def _construct_filter_parameters(project_name, **kwargs):
         }
         content_filters.append(next_filter)
     filt = {"op": "and",
-            "content": content_filters}
+            "content": content_filters
+            }
     return filt
 
 
 def _convert_to_list(x):
     """ Convert x to a list if not already a list 
+
+    Examples
+    -----------
+
+    >>> _convert_to_list('Clinical')
+    ['Clinical']
+    >>> _convert_to_list(['Clinical'])
+    ['Clinical']
+    >>> _convert_to_list(('Clinical','Biospecimen'))
+    ['Clinical', 'Biospecimen']
+
     """
     if not(x):
         return(None)
@@ -88,6 +111,11 @@ def _compute_start_given_page(page, size):
 
 def _construct_parameters(project_name, size, data_format=None, **kwargs):
     """ Construct query parameters given project name & list of data categories
+
+    >>> _construct_parameters()
+    {'filters': 
+        '{"content": [{"content": {"value": ["TCGA-BLCA"], "field": "cases.project.project_id"}, "op": "in"}, {"content": {"value": ["Clinical"], "field": "files.data_category"}, "op": "in"}], "op": "and"}',
+     'size': 5}
     """
     filt = _construct_filter_parameters(project_name=project_name, **kwargs)
     params = {

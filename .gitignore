@@ -1,2 +1,4 @@
 data/gdc
 __pycache__
+.cache
+tests/test_data

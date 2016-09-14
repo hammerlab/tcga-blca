@@ -47,7 +47,7 @@ def _construct_filter_parameters(project_name, endpoint_name='files', **kwargs):
     
     Examples
     -----------
-
+    
     >>> _construct_filter_parameters(project_name='TCGA-BLCA', data_category='Clinical')
     {'content': [
         {'content': {'field': 'cases.project.project_id', 'value': ['TCGA-BLCA']}, 'op': 'in'},
@@ -312,6 +312,9 @@ def _get_manifest_once(project_name, size, page=0, **kwargs):
 
 def get_manifest(project_name, size=100, pages=None, **kwargs):
     """ get manifest containing for all results matching project_name & categories
+
+    >>> get_manifest(project_name='TCGA-BLCA', data_category=['Clinical'], pages=2, size=2)
+    'id\tfilename\tmd5\tsize\tstate\n...'
     """
     output = io.StringIO()
     if not(pages):
@@ -336,11 +339,20 @@ def _mkdir_if_not_exists(dir):
                 os.mkdir(sub_dir)
 
 
-def _download_files(project_name, data_category, page_size, max_pages=None, data_dir=GDC_DATA_DIR, **kwargs):
+def _download_files(project_name, data_category, page_size=50, max_pages=None, data_dir=GDC_DATA_DIR, **kwargs):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
         3. Verify that files downloaded as expected
+
+    >>> _download_files(project_name='TCGA-BLCA', data_category='Clinical', max_pages=1, page_size=5)
+    100% [##############################] Time: 0:00:00
+    100% [#################] Time: 0:00:00 297.30 kB/s
+    100% [##############################] Time: 0:00:00
+    100% [#################] Time: 0:00:00 532.74 kB/s
+    100% [##############################] Time: 0:00:00
+    100% [#################] Time: 0:00:00 394.49 kB/s
+
     """
     _mkdir_if_not_exists(data_dir)
     manifest_contents = get_manifest(project_name=project_name,

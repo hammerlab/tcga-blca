@@ -42,7 +42,7 @@ VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 
 #### ---- generate manifest / list of files to download ---- 
 
-def _construct_filter_params(project_name, **kwargs):
+def _construct_filter_parameters(project_name, **kwargs):
     """ construct filter-json given project name & files requested
     """
     filt_project = {"op": "in",
@@ -89,7 +89,7 @@ def _compute_start_given_page(page, size):
 def _construct_parameters(project_name, size, data_format=None, **kwargs):
     """ Construct query parameters given project name & list of data categories
     """
-    filt = _construct_filter_params(project_name=project_name, **kwargs)
+    filt = _construct_filter_parameters(project_name=project_name, **kwargs)
     params = {
         'filters': json.dumps(filt),
         'size': size

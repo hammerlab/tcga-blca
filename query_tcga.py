@@ -45,18 +45,24 @@ VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 def _construct_filter_params(project_name, data_categories, data_format=None):
     """ construct filter-json given project name & files requested
     """
-    filt_project = {"op": "in",
-            "content": {
-                "field": "cases.project.project_id",
-                "value": [project_name]
-            }
-    }
-    filt_data_category = {"op": "in",
-            "content": {
-                "field": "files.data_category",
-                "value": data_categories
-            }
-    }
+    filters = list()
+
+    if project_name:
+        filt_project = {"op": "in",
+                "content": {
+                    "field": "cases.project.project_id",
+                    "value": [project_name]
+                }
+        }
+        filters.append(filt_project)
+    if data_categories:
+        filt_data_category = {"op": "in",
+                "content": {
+                    "field": "files.data_category",
+                    "value": data_categories
+                }
+        }
+        filters.append(filt_data_category)
     if data_format:
         filt_data_format = {"op": "in",
                 "content": {
@@ -64,14 +70,10 @@ def _construct_filter_params(project_name, data_categories, data_format=None):
                     "value": data_format
                 }
         }
-    else:
-        filt_data_format=None
+        filters.append(filt_data_format)
     filt = {"op": "and",
-            "content": [
-                filt_project,
-                filt_data_category,
-                filt_data_format,
-                ]}
+            "content": filters
+            }
     return filt
 
 

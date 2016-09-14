@@ -133,6 +133,14 @@ def _search_for_field(search_string, endpoint_name='files'):
 
 def _list_valid_fields(endpoint_name='files'):
     """ List allowable fields for this endpoint
+
+    >>> res = _list_valid_fields(endpoint_name='files')
+    >>> len(res)
+    221
+    >>> res.sort()
+    >>> res[0:3]
+    ['files.access', 'files.acl', 'files.analysis.analysis_id']
+
     """
     _verify_data_list(data_list=[endpoint_name], allowed_values=VALID_ENDPOINTS)
     endpoint = GDC_API_ENDPOINT.format(endpoint=endpoint_name)+'/_mapping'

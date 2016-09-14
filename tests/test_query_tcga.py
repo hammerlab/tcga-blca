@@ -1,6 +1,7 @@
 
 from query_tcga import query_tcga as qt
 import pytest
+import shutil
 
 def test_construct_filter_parameters():
    res = qt._construct_filter_parameters(project_name='TCGA-BLCA', data_category='Clinical')
@@ -21,6 +22,13 @@ def test_construct_parameters():
     ## isn't always in same order. *could* sort the dict, but prob isn't necessary
     assert list(qt._construct_parameters(project_name='TCGA-BLCA', size=5).keys()).sort() == ['filters','size'].sort()
 
+def test_list_valid_fields():
+    expected = ['files.access', 'files.acl', 'files.analysis.analysis_id']
+    res = list(qt._list_valid_fields(endpoint_name='files'))
+    res.sort()
+    assert res[0:3] == expected
+    assert len(res) >= 200
+
 def test_list_valid_options():
     expected = ['Simple Nucleotide Variation',
      'Transcriptome Profiling',
@@ -28,9 +36,11 @@ def test_list_valid_options():
      'Copy Number Variation',
      'Biospecimen',
      'Clinical']
-    assert qt._list_valid_options('data_category') == expected
-    assert qt._list_valid_options('files.data_category', endpoint_name='files') == expected
-
+    res = qt._list_valid_options('data_category')
+    assert isinstance(res, list)
+    assert set(res) == set(expected)
+    assert set(qt._list_valid_options('files.data_category', endpoint_name='files')) == set(expected)
+    # confirm raises an error when strip_endpoint_from_field_name == False
     with pytest.raises(ValueError):
         qt._list_valid_options('files.data_category', endpoint_name='files', strip_endpoint_from_field_name=False)
 
@@ -62,9 +72,11 @@ def test_get_manifest():
     assert len(res.splitlines()) == 5 ## 4 records + header
     assert res.splitlines()[0] == 'id\tfilename\tmd5\tsize\tstate'
 
-## TODO fix tempdir setup
+## TODO fix/use tempdir setup
+## doesn't work now b/c doesn't have a path
 # http://doc.pytest.org/en/latest/_modules/_pytest/tmpdir.html
 def test_download_files():
+    shutil.rmtree('tests/test_data')
     res = qt._download_files(project_name='TCGA-BLCA', data_category='Clinical', max_pages=1, page_size=5, data_dir='tests/test_data')
     assert res == True
 

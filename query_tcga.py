@@ -83,11 +83,11 @@ def _compute_start_given_page(page, size):
     return (page*size+1)
 
 
-def _construct_parameters(project_name, data_categories, size, data_type=None):
+def _construct_parameters(project_name, data_categories, size, data_format=None):
     """ Construct query parameters given project name & list of data categories
     """
     _verify_field_values(data_list=data_categories, field_name='data_category', endpoint_name='files')
-    filt = _construct_filter_params(project_name=project_name, data_categories=data_categories)
+    filt = _construct_filter_params(project_name=project_name, data_categories=data_categories, data_format=data_format)
     params = {
         'filters': json.dumps(filt),
         'size': size,
@@ -152,21 +152,21 @@ def _verify_data_list(data_list, allowed_values, message='At least one value giv
     return True
 
 
-def _query_num_pages(project_name, data_categories, size):
+def _query_num_pages(project_name, data_categories, size, data_format=None):
     """ Get total number of pages for given criteria
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    params = _construct_parameters(project_name=project_name, data_categories=data_categories, size=size)
+    params = _construct_parameters(project_name=project_name, data_categories=data_categories, size=size, data_format=data_format)
     response = requests.get(endpoint, params=params)
     pages = response.json()['data']['pagination']['pages']
     return pages
 
 
-def _query_manifest_once(project_name, data_categories, size, page=0):
+def _query_manifest_once(project_name, data_categories, size, page=0, data_format=None):
     """ Single query for manifest of files matching project_name & categories
     """ 
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    params = _construct_parameters(project_name=project_name, data_categories=data_categories, size=size)
+    params = _construct_parameters(project_name=project_name, data_categories=data_categories, size=size, data_format=data_format)
     from_param = _compute_start_given_page(page=page, size=size)
     extra_params = {
         'return_type': 'manifest',
@@ -178,14 +178,14 @@ def _query_manifest_once(project_name, data_categories, size, page=0):
     return response
 
 
-def query_manifest(project_name, data_categories=['Clinical'], size=100, pages=None):
+def query_manifest(project_name, data_categories=['Clinical'], size=100, pages=None, data_format=None):
     """ Query for all results matching project_name & categories
     """
     output = io.StringIO()
     if not(pages):
-        pages = _query_num_pages(project_name=project_name, data_categories=data_categories, size=size)
+        pages = _query_num_pages(project_name=project_name, data_categories=data_categories, size=size, data_format=data_format)
     for page in np.arange(pages):
-        response = _query_manifest_once(project_name=project_name, data_categories=data_categories, page=page, size=size)
+        response = _query_manifest_once(project_name=project_name, data_categories=data_categories, page=page, size=size, data_format=data_format)
         response_text = response.text.splitlines()
         if page>0:
             del response_text[0]
@@ -203,7 +203,7 @@ def _mkdir_if_not_exists(dir):
             if not(os.path.exists(sub_dir)):
                 os.mkdir(sub_dir)
 
-def download_files(project_name, data_categories=['Clinical'], page_size=100, max_pages=None, data_dir=GDC_DATA_DIR):
+def download_files(project_name, data_categories=['Clinical'], page_size=100, max_pages=None, data_dir=GDC_DATA_DIR, data_format=None):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -211,7 +211,7 @@ def download_files(project_name, data_categories=['Clinical'], page_size=100, ma
     """
     _mkdir_if_not_exists(data_dir)
     manifest_contents = query_manifest(project_name=project_name,
-                                       data_categories=data_categories,
+                                       data_categories=data_categories, data_format=data_format, 
                                        size=page_size, pages=max_pages)
     manifest_file = tempfile.NamedTemporaryFile()
     try:

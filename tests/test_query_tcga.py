@@ -78,7 +78,8 @@ def test_get_manifest():
 def test_download_files():
     shutil.rmtree('tests/test_data')
     res = qt._download_files(project_name='TCGA-BLCA', data_category='Clinical', max_pages=1, page_size=5, data_dir='tests/test_data')
-    assert res == True
+    assert isinstance(res, list)
+    assert len(res) == 5
 
 
 

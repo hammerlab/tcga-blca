@@ -42,7 +42,7 @@ VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 
 #### ---- generate manifest / list of files to download ---- 
 
-def _construct_filter_parameters(project_name, **kwargs):
+def _construct_filter_parameters(project_name, endpoint_name='files', **kwargs):
     """ construct filter-json given project name & files requested
     
     Examples
@@ -65,12 +65,13 @@ def _construct_filter_parameters(project_name, **kwargs):
 
     content_filters = [filt_project]
     query_params = dict(**kwargs)
-    for item in query_params:
-        _verify_field_values(data_list=_convert_to_list(query_params[item]), field_name=item, endpoint_name='files')
+    for field in query_params:
+        field_name = "{endpoint}.{field}".format(endpoint=endpoint_name, field=field)
+        _verify_field_values(data_list=_convert_to_list(query_params[field]), field_name=field_name, endpoint_name=endpoint_name)
         next_filter = {"op": "in",
                 "content": {
-                    "field": "files.{key}".format(key=item),
-                    "value": _convert_to_list(query_params[item])
+                    "field": field_name,
+                    "value": _convert_to_list(query_params[field])
                 }
         }
         content_filters.append(next_filter)
@@ -109,10 +110,10 @@ def _compute_start_given_page(page, size):
     return (page*size+1)
 
 
-def _construct_parameters(project_name, size, data_format=None, **kwargs):
+def _construct_parameters(project_name, size, **kwargs):
     """ Construct query parameters given project name & list of data categories
 
-    >>> _construct_parameters()
+    >>> _construct_parameters(project_name='TCGA-BLCA', size=5)
     {'filters': 
         '{"content": [{"content": {"value": ["TCGA-BLCA"], "field": "cases.project.project_id"}, "op": "in"}, {"content": {"value": ["Clinical"], "field": "files.data_category"}, "op": "in"}], "op": "and"}',
      'size': 5}
@@ -144,8 +145,13 @@ def _list_valid_fields(endpoint_name='files'):
     return field_names
 
 
-def _list_valid_options(field_name, endpoint_name='files', project_name=None):
+def _list_valid_options(field_name, endpoint_name='files',
+                        project_name=None, strip_endpoint_from_field_name=True):
     """ List valid options (values) for a field.
+
+    Note that field names are listed without prefix (as 'data_category') when given as a facet. This function
+      masks that complexity by stripping out the endpoint from the field name by default. (the default behavior
+      can be turned off using parameter `strip_endpoint_from_field_name=False`)
 
     >>> _list_valid_options('data_category')
     ['Simple Nucleotide Variation',
@@ -155,6 +161,18 @@ def _list_valid_options(field_name, endpoint_name='files', project_name=None):
      'Biospecimen',
      'Clinical']
 
+    >>> _list_valid_options('files.data_category', endpoint_name='files')
+    ['Simple Nucleotide Variation',
+      'Transcriptome Profiling',
+      'Raw Sequencing Data',
+      'Copy Number Variation',
+      'Biospecimen',
+      'Clinical']
+
+    >>> _list_valid_options('files.data_category', endpoint_name='files', strip_endpoint_from_field_name=False)
+    ValueError: Server responded with: {'data': {'pagination': {'from': 1, 'count': 0, 'total': 262293, 'sort': '', 'size': 0, 'page': 1, 'pages': 262293}, 'hits': []}, 'warnings': {'facets': 'unrecognized values: [files.data_category]'}}
+
+     
     """
     # according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
     # this is the best way to query the endpoint for values
@@ -167,7 +185,9 @@ def _list_valid_options(field_name, endpoint_name='files', project_name=None):
             }
         }
     else:
-        filt_project=None
+        filt_project = None
+    if strip_endpoint_from_field_name:
+        field_name = field_name.replace('{}.'.format(endpoint_name), '')
     params = {'filters': json.dumps(filt_project),
               'facets': field_name,
               'size': 0}
@@ -206,11 +226,22 @@ def _verify_field_name(field_name, endpoint_name):
 
 def _verify_field_values(data_list, field_name, endpoint_name, project_name=None):
     """ Verify that each element in a given list is among the allowed_values 
-        for that field/endpoint (& optionally for that project)
+        for that field/endpoint (& optionally for that project).
+
+    >>> _verify_field_values(['Clinical'], field_name='files.data_category', endpoint_name='files')
+    True
 
     >>> _verify_field_values(['Clinical'], field_name='data_category', endpoint_name='files')
-    True
+    ValueError: Field given was not valid: data_category.
+     Some close matches:
+            files.data_category
+            files.analysis.input_files.data_category
+            files.archive.data_category
+            files.metadata_files.data_category
+            files.index_files.data_category
+            files.downstream_analyses.output_files.data_category
     """ 
+    _verify_field_name(field_name=field_name, endpoint_name=endpoint_name)
     valid_options = _list_valid_options(field_name=field_name, endpoint_name=endpoint_name, project_name=project_name)
     return _verify_data_list(data_list=data_list, allowed_values=valid_options)
 
@@ -241,10 +272,10 @@ def _raise_error_parsing_result(response):
         raise ValueError('Server responded with: {}'.format(response.json()))
 
 
-def _query_num_pages(project_name, size, **kwargs):
+def _get_num_pages(project_name, size, **kwargs):
     """ Get total number of pages for given criteria
 
-    >>> _query_num_pages('TCGA-BLCA', data_category=['Clinical'], size=5)
+    >>> _get_num_pages('TCGA-BLCA', data_category=['Clinical'], size=5)
     83
 
     """
@@ -259,10 +290,10 @@ def _query_num_pages(project_name, size, **kwargs):
     return pages
 
 
-def _query_manifest_once(project_name, size, page=0, **kwargs):
-    """ Single query for manifest of files matching project_name & categories
+def _get_manifest_once(project_name, size, page=0, **kwargs):
+    """ Single get for manifest of files matching project_name & categories
 
-    >>> _query_manifest_once('TCGA-BLCA', data_category=['Clinical'], size=5)
+    >>> _get_manifest_once('TCGA-BLCA', data_category=['Clinical'], size=5)
     <Response [200]>
     """ 
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
@@ -279,14 +310,14 @@ def _query_manifest_once(project_name, size, page=0, **kwargs):
     return response
 
 
-def query_manifest(project_name, size=100, pages=None, **kwargs):
-    """ Query for all results matching project_name & categories
+def get_manifest(project_name, size=100, pages=None, **kwargs):
+    """ get manifest containing for all results matching project_name & categories
     """
     output = io.StringIO()
     if not(pages):
-        pages = _query_num_pages(project_name=project_name, size=size, **kwargs)
+        pages = _get_num_pages(project_name=project_name, size=size, **kwargs)
     for page in np.arange(pages):
-        response = _query_manifest_once(project_name=project_name, page=page, size=size, **kwargs)
+        response = _get_manifest_once(project_name=project_name, page=page, size=size, **kwargs)
         response_text = response.text.splitlines()
         if page>0:
             del response_text[0]
@@ -312,7 +343,7 @@ def _download_files(project_name, data_category, page_size, max_pages=None, data
         3. Verify that files downloaded as expected
     """
     _mkdir_if_not_exists(data_dir)
-    manifest_contents = query_manifest(project_name=project_name,
+    manifest_contents = get_manifest(project_name=project_name,
                                        data_category=data_category,
                                        size=page_size, pages=max_pages, **kwargs)
     manifest_file = tempfile.NamedTemporaryFile()
@@ -391,3 +422,8 @@ def _parse_tcga_clinical(xml_file_path, project_name='TCGA-BLCA'):
     # should be a dict structured as {'field_name': ['node1','node2', ...]}
     data_elements = doc[head_node[0]]['{prefix}:patient'.format(prefix=study_prefix)]
     return data_elements
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()

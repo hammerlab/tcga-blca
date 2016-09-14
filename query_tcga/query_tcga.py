@@ -388,6 +388,16 @@ def download_clinical_files(project_name, **kwargs):
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
         3. Verify that files downloaded as expected
+
+    Parameters
+    -----------
+      project_name (string, required): Name of project, ie 'TCGA-BLCA', 'TCGA-BRCA', etc
+
+    Optional Parameters (mostly useful for testing)
+    -----------
+      page_size (int, optional): how many records to list per page (default 50)
+      max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
+
     """
     return _download_files(project_name=project_name, data_category=['Clinical'], **kwargs)
 

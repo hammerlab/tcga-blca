@@ -40,21 +40,21 @@ VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 ## 4. transform files to format needed by Cohorts (not done)
 
 
-#### ---- generate manifest / list of files to download ---- 
+#### ---- generate manifest / list of files to download ----
 
 def _construct_filter_parameters(project_name, endpoint_name='files', **kwargs):
     """ construct filter-json given project name & files requested
-    
+
     Examples
     -----------
-    
+
     >>> _construct_filter_parameters(project_name='TCGA-BLCA', data_category='Clinical')
     {'content': [
         {'content': {'field': 'cases.project.project_id', 'value': ['TCGA-BLCA']}, 'op': 'in'},
         {'content': {'field': 'files.data_category', 'value': ['Clinical']}, 'op': 'in'}
         ],
         'op': 'and'}
-    
+
     """
     filt_project = {"op": "in",
             "content": {
@@ -82,7 +82,7 @@ def _construct_filter_parameters(project_name, endpoint_name='files', **kwargs):
 
 
 def _convert_to_list(x):
-    """ Convert x to a list if not already a list 
+    """ Convert x to a list if not already a list
 
     Examples
     -----------
@@ -114,7 +114,7 @@ def _construct_parameters(project_name, size, **kwargs):
     """ Construct query parameters given project name & list of data categories
 
     >>> _construct_parameters(project_name='TCGA-BLCA', size=5)
-    {'filters': 
+    {'filters':
         '{"content": [{"content": {"value": ["TCGA-BLCA"], "field": "cases.project.project_id"}, "op": "in"}, {"content": {"value": ["Clinical"], "field": "files.data_category"}, "op": "in"}], "op": "and"}',
      'size': 5}
     """
@@ -180,7 +180,7 @@ def _list_valid_options(field_name, endpoint_name='files',
     >>> _list_valid_options('files.data_category', endpoint_name='files', strip_endpoint_from_field_name=False)
     ValueError: Server responded with: {'data': {'pagination': {'from': 1, 'count': 0, 'total': 262293, 'sort': '', 'size': 0, 'page': 1, 'pages': 262293}, 'hits': []}, 'warnings': {'facets': 'unrecognized values: [files.data_category]'}}
 
-     
+
     """
     # according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
     # this is the best way to query the endpoint for values
@@ -233,7 +233,7 @@ def _verify_field_name(field_name, endpoint_name):
     return found
 
 def _verify_field_values(data_list, field_name, endpoint_name, project_name=None):
-    """ Verify that each element in a given list is among the allowed_values 
+    """ Verify that each element in a given list is among the allowed_values
         for that field/endpoint (& optionally for that project).
 
     >>> _verify_field_values(['Clinical'], field_name='files.data_category', endpoint_name='files')
@@ -248,14 +248,14 @@ def _verify_field_values(data_list, field_name, endpoint_name, project_name=None
             files.metadata_files.data_category
             files.index_files.data_category
             files.downstream_analyses.output_files.data_category
-    """ 
+    """
     _verify_field_name(field_name=field_name, endpoint_name=endpoint_name)
     valid_options = _list_valid_options(field_name=field_name, endpoint_name=endpoint_name, project_name=project_name)
     return _verify_data_list(data_list=data_list, allowed_values=valid_options)
 
 
 def _verify_data_list(data_list, allowed_values, message='At least one value given was invalid'):
-    """ Verify that each element in a given list is among the allowed_values. 
+    """ Verify that each element in a given list is among the allowed_values.
 
     >>> _verify_data_list(['TCGA-BLCA'], allowed_values=['Clinical'])
     ValueError: At least one value given was invalid: TCGA-BLCA
@@ -263,7 +263,7 @@ def _verify_data_list(data_list, allowed_values, message='At least one value giv
     True
     >>> _verify_data_list(['Clinical'], allowed_values=_list_valid_options('data_category'))
     True
-    """ 
+    """
     data_list = _convert_to_list(data_list)
     if not(all(el in allowed_values for el in data_list)):
         ## identify invalid categories for informative error message
@@ -303,7 +303,7 @@ def _get_manifest_once(project_name, size, page=0, **kwargs):
 
     >>> _get_manifest_once('TCGA-BLCA', data_category=['Clinical'], size=5)
     <Response [200]>
-    """ 
+    """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
     params = _construct_parameters(project_name=project_name, size=size, **kwargs)
     from_param = _compute_start_given_page(page=page, size=size)
@@ -336,7 +336,7 @@ def get_manifest(project_name, size=100, pages=None, **kwargs):
     return output.getvalue()
 
 
-#### ---- download files ---- 
+#### ---- download files ----
 
 def _mkdir_if_not_exists(dir):
     if not(os.path.exists(dir)):
@@ -379,7 +379,7 @@ def _download_files(project_name, data_category, page_size=50, max_pages=None, d
         # Verify contents have been downloaded
         verify_download(manifest_file.name, data_dir=data_dir)
     finally:
-        manifest_file.close()  
+        manifest_file.close()
     return True
 
 
@@ -392,7 +392,7 @@ def download_clinical_files(project_name, **kwargs):
     return _download_files(project_name=project_name, data_category=['Clinical'], **kwargs)
 
 
-#### ---- verify downloaded files ---- 
+#### ---- verify downloaded files ----
 
 def _read_manifest_data(manifest_file):
     """ Read file contents into pandas dataframe
@@ -402,7 +402,7 @@ def _read_manifest_data(manifest_file):
 
 
 def _verify_download_single_file(row, data_dir=os.getcwd()):
-    """ Verify that the file indicated in the manifest exists in data_dir 
+    """ Verify that the file indicated in the manifest exists in data_dir
     """
     file_name = os.path.join(data_dir, row['id'], row['filename'])
     return os.path.exists(file_name)
@@ -444,6 +444,3 @@ def _parse_tcga_clinical(xml_file_path, project_name='TCGA-BLCA'):
     return data_elements
 
 
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()

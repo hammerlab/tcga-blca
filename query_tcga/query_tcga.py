@@ -435,9 +435,10 @@ def _parse_tcga_clinical(xml_file_path, project_name='TCGA-BLCA'):
     study_prefix = project_name.lower().replace('tcga-','')
     # identify head-node, in case name changes
     head_node_search_pattern = '{prefix}:tcga'.format(prefix=study_prefix)
-    head_node = [key for key in doc.keys() if key.contains(head_node_search_pattern)]
+    head_node = [key for key in doc.keys() if key.find(head_node_search_pattern)>0]
     if (len(head_node) != 1):
-        raise ValueError('Head node ({head}) could not be identified. Candidate keys include: {keys} '.format(head=head_node_search_pattern, keys=','.split(doc.keys())))
+        raise ValueError('Head node ({head}) could not be identified. Candidate keys include: {keys} '.format(head=head_node_search_pattern,
+         keys=','.join(list(doc.keys()))))
     # identify data elements to extract
     # should be a dict structured as {'field_name': ['node1','node2', ...]}
     data_elements = doc[head_node[0]]['{prefix}:patient'.format(prefix=study_prefix)]

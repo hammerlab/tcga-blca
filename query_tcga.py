@@ -169,9 +169,7 @@ def _query_manifest_once(project_name, data_categories, size, page=0):
     extra_params = {
         'return_type': 'manifest',
         'from': from_param,
-        'sort': 'file_name:asc',
-        }
-    # requests URL-encodes automatically
+        'sort': 'file_name:asc'}
     response = requests.get(endpoint, params=dict(params, **extra_params))
     if response.status_code != 200:
         raise ValueError('Error querying API: {} (status_code: {})'.format(response.text, response.status_code))

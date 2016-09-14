@@ -199,6 +199,10 @@ def _raise_error_parsing_result(response):
 
 def _query_num_pages(project_name, size, **kwargs):
     """ Get total number of pages for given criteria
+
+    >>> _query_num_pages('TCGA-BLCA', data_category=['Clinical'], size=5)
+    83
+    
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
     params = _construct_parameters(project_name=project_name, size=size, **kwargs)
@@ -213,6 +217,9 @@ def _query_num_pages(project_name, size, **kwargs):
 
 def _query_manifest_once(project_name, size, page=0, **kwargs):
     """ Single query for manifest of files matching project_name & categories
+
+    >>> _query_manifest_once('TCGA-BLCA', data_category=['Clinical'], size=5)
+    <Response [200]>
     """ 
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
     params = _construct_parameters(project_name=project_name, size=size, **kwargs)
@@ -254,7 +261,7 @@ def _mkdir_if_not_exists(dir):
                 os.mkdir(sub_dir)
 
 
-def download_clinical_files(project_name, data_category=['Clinical'], data_format='TSV', page_size=100, max_pages=None, data_dir=GDC_DATA_DIR, *kwargs):
+def _download_files(project_name, data_category, page_size, max_pages=None, data_dir=GDC_DATA_DIR, **kwargs):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -262,7 +269,7 @@ def download_clinical_files(project_name, data_category=['Clinical'], data_forma
     """
     _mkdir_if_not_exists(data_dir)
     manifest_contents = query_manifest(project_name=project_name,
-                                       data_category=data_categories, data_format=data_format,
+                                       data_category=data_category,
                                        size=page_size, pages=max_pages, **kwargs)
     manifest_file = tempfile.NamedTemporaryFile()
     try:
@@ -279,6 +286,15 @@ def download_clinical_files(project_name, data_category=['Clinical'], data_forma
     finally:
         manifest_file.close()  
     return True
+
+
+def download_clinical_files(project_name, **kwargs):
+    """ Download clinical files for this project to the current working directory
+        1. Query API to get manifest file containing all files matching criteria
+        2. Use gdc-client to download files to current working directory
+        3. Verify that files downloaded as expected
+    """
+    return _download_files(project_name=project_name, data_category=['Clinical'], **kwargs)
 
 
 #### ---- verify downloaded files ---- 

@@ -484,6 +484,9 @@ def _parse_clin_data(soup, **kwargs):
 def _get_clinical_data_from_file(xml_file, **kwargs):
     soup = _read_xml_bs(xml_file)
     data = _parse_clin_data(soup, **kwargs)
+    data['_source_type'] = 'XML'
+    data['_source_desc'] = xml_file
+    data['patient_id'] = soup.findChild('patient_id').text
     return data
 
 def get_clinical_data(project_name, **kwargs):

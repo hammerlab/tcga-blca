@@ -6,7 +6,6 @@ import pandas as pd
 import io
 import numpy as np
 import tempfile
-import xmltodict
 import bs4
 
 ## -- GIVEN -- :

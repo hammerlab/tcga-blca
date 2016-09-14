@@ -146,6 +146,15 @@ def _list_valid_fields(endpoint_name='files'):
 
 def _list_valid_options(field_name, endpoint_name='files', project_name=None):
     """ List valid options (values) for a field.
+
+    >>> _list_valid_options('data_category')
+    ['Simple Nucleotide Variation',
+     'Transcriptome Profiling',
+     'Raw Sequencing Data',
+     'Copy Number Variation',
+     'Biospecimen',
+     'Clinical']
+
     """
     # according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
     # this is the best way to query the endpoint for values
@@ -171,9 +180,36 @@ def _list_valid_options(field_name, endpoint_name='files', project_name=None):
     return items
 
 
+def _verify_field_name(field_name, endpoint_name):
+    """ Verify that field exists for this endpoint
+
+    >>> _verify_field_name(field_name='files.data_category', endpoint_name='files')
+    True
+
+    >>> _verify_field_name(field_name='data_category', endpoint_name='files')
+    ValueError: Field given was not valid: data_category.
+     Some close matches:
+            files.data_category
+            files.analysis.input_files.data_category
+            files.archive.data_category
+            files.metadata_files.data_category
+            files.index_files.data_category
+            files.downstream_analyses.output_files.data_category
+    """
+    try:
+        found = _verify_data_list(field_name, allowed_values=_list_valid_fields(endpoint_name=endpoint_name))
+    except ValueError:
+        possible_matches = _search_for_field(field_name, endpoint_name=endpoint_name)
+        raise ValueError('Field given was not valid: {given}. \n Some close matches: \n\t{matches}'.format(given=field_name,
+             matches='\n\t'.join(possible_matches)))
+    return found
+
 def _verify_field_values(data_list, field_name, endpoint_name, project_name=None):
     """ Verify that each element in a given list is among the allowed_values 
         for that field/endpoint (& optionally for that project)
+
+    >>> _verify_field_values(['Clinical'], field_name='data_category', endpoint_name='files')
+    True
     """ 
     valid_options = _list_valid_options(field_name=field_name, endpoint_name=endpoint_name, project_name=project_name)
     return _verify_data_list(data_list=data_list, allowed_values=valid_options)
@@ -181,12 +217,20 @@ def _verify_field_values(data_list, field_name, endpoint_name, project_name=None
 
 def _verify_data_list(data_list, allowed_values, message='At least one value given was invalid'):
     """ Verify that each element in a given list is among the allowed_values. 
+
+    >>> _verify_data_list(['TCGA-BLCA'], allowed_values=['Clinical'])
+    ValueError: At least one value given was invalid: TCGA-BLCA
+    >>> _verify_data_list(['Clinical'], allowed_values=['Clinical', 'Biospecimen'])
+    True
+    >>> _verify_data_list(['Clinical'], allowed_values=_list_valid_options('data_category'))
+    True
     """ 
+    data_list = _convert_to_list(data_list)
     if not(all(el in allowed_values for el in data_list)):
         ## identify invalid categories for informative error message
         bad_values = list()
         [bad_values.append(el) for el in data_list if not(el in allowed_values)]
-        raise ValueError('{message}: {bad_values}'.format(', '.join(bad_values=bad_values, message=message)))
+        raise ValueError('{message}: {bad_values}'.format(bad_values=', '.join(bad_values), message=message))
     return True
 
 
@@ -202,7 +246,7 @@ def _query_num_pages(project_name, size, **kwargs):
 
     >>> _query_num_pages('TCGA-BLCA', data_category=['Clinical'], size=5)
     83
-    
+
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
     params = _construct_parameters(project_name=project_name, size=size, **kwargs)

@@ -7,6 +7,7 @@ import io
 import numpy as np
 import tempfile
 import xmltodict
+import bs4
 
 ## -- GIVEN -- :
 ## location of token authorizing download
@@ -377,10 +378,10 @@ def _download_files(project_name, data_category, page_size=50, max_pages=None, d
         if subprocess.check_call(exe_bash, cwd=data_dir):
             subprocess.call(exe_bash, cwd=data_dir)
         # Verify contents have been downloaded
-        verify_download(manifest_file.name, data_dir=data_dir)
+        downloaded = verify_download(manifest_file.name, data_dir=data_dir)
     finally:
         manifest_file.close()
-    return True
+    return downloaded
 
 
 def download_clinical_files(project_name, **kwargs):
@@ -405,43 +406,95 @@ def _verify_download_single_file(row, data_dir=os.getcwd()):
     """ Verify that the file indicated in the manifest exists in data_dir
     """
     file_name = os.path.join(data_dir, row['id'], row['filename'])
-    return os.path.exists(file_name)
+    if not(os.path.exists(file_name)):
+        raise ValueError(file_name)
+    else:
+        return file_name
 
 
 def verify_download(manifest_file, data_dir=os.getcwd()):
     """ Verify that files listed in the manifest exist in data_dir
     """
+    failed_downloads = list()
     manifest_data = _read_manifest_data(manifest_file)
-    verification = manifest_data.apply(lambda row: _verify_download_single_file(row, data_dir=data_dir), axis=1)
-    if (all(verification)):
-        return True
-    else:
-        ## TODO identify which rows failed
-        ## TODO format error message to list files that failed to download
-        raise ValueError("Some files failed to download.")
+    try:
+        downloaded = list(manifest_data.apply(lambda row: _verify_download_single_file(row, data_dir=data_dir), axis=1))
+    except ValueError as e:
+        failed_downloads.append(e)
+
+    if (len(failed_downloads)>0):
+        ## TODO handle failed downloads
+        raise ValueError("Some files failed to download:\n\t{}:".format('\n\t'.join(failed_downloads)))
+    return downloaded
 
 
 #### ---- transform downloaded files to Cohorts-friendly format ----
 
-
-def _parse_tcga_clinical(xml_file_path, project_name='TCGA-BLCA'):
-    """ Parse incoming TCGA data; return dict suitable to be processed into a Pandas dataframe
-    """
-    # read document
+def _read_xml_bs(xml_file_path):
     with open(xml_file_path) as fd:
-        doc = xmltodict.parse(fd.read())
+        soup = bs4.BeautifulSoup(fd.read(), 'xml')
+    return soup
 
-    # identify study-prefix, given project_name
-    study_prefix = project_name.lower().replace('tcga-','')
-    # identify head-node, in case name changes
-    head_node_search_pattern = '{prefix}:tcga'.format(prefix=study_prefix)
-    head_node = [key for key in doc.keys() if key.find(head_node_search_pattern)>0]
-    if (len(head_node) != 1):
-        raise ValueError('Head node ({head}) could not be identified. Candidate keys include: {keys} '.format(head=head_node_search_pattern,
-         keys=','.join(list(doc.keys()))))
-    # identify data elements to extract
-    # should be a dict structured as {'field_name': ['node1','node2', ...]}
-    data_elements = doc[head_node[0]]['{prefix}:patient'.format(prefix=study_prefix)]
-    return data_elements
+def _parse_clin_data_from_tag(tag, name_prefix=None, preferred_only=True):
+    data = dict()
+
+    if not(isinstance(tag, bs4.element.Tag)):
+        return data
+
+    if tag.is_empty_element:
+        return data
+
+    ## get field_name for tag data
+    if tag.has_attr('preferred_name'):
+        field_name = tag.get('preferred_name')
+    elif not(preferred_only):
+        field_name = tag.name
+    elif name_prefix and not(preferred_only):
+        field_name = '-'.join([name_prefix, field_name])
+    else:
+        field_name = None
+
+    ## extract text from this tag, if it exists
+    if tag.text:
+        field_value = tag.text.strip()
+    else:
+        field_value = None
+
+    ## update data with this tag's name & value
+    ## only capture data if field_name & field_value defined
+    if field_name and field_value and field_value != '':
+        data[field_name] = field_value
+
+    ## if tag has children, process those
+    if len(tag)>1:
+        for sub_tag in tag:
+            sub_tag_data = _parse_clin_data_from_tag(sub_tag, name_prefix=field_name)
+            data.update(sub_tag_data)
+
+    return data
+
+def _parse_clin_data(soup, **kwargs):
+    patient_node = soup.findChild('patient')
+    data = dict()
+    for tag in patient_node:
+        if isinstance(tag, bs4.element.Tag):
+            tag_data = _parse_clin_data_from_tag(tag, **kwargs)
+            data.update(tag_data)
+    return data
+
+def _get_clinical_data_from_file(xml_file, **kwargs):
+    soup = _read_xml_bs(xml_file)
+    data = _parse_clin_data(soup, **kwargs)
+    return data
+
+def get_clinical_data(project_name, **kwargs):
+    xml_files = download_clinical_files(project_name=project_name, **kwargs)
+    data = list()
+    for xml_file in xml_files:
+        data.append(_get_clinical_data_from_file(xml_file))
+    df = pd.DataFrame(data)
+    return df
+
+
 
 

@@ -8,17 +8,20 @@ import numpy as np
 import tempfile
 import bs4
 import logging
-from functools import lru_cache
 from query_tcga.log_with import log_with
 from query_tcga import defaults 
 from query_tcga.defaults import GDC_API_ENDPOINT
 from query_tcga import parameters as _params
 from query_tcga import error_handling as _errors
+from query_tcga import cache
+from query_tcga.cache import requests_get
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+## cache recquets depending on value of 
+cache.setup_cache()
 ## -- DO -- :
 ## 1. generate manifest / list of files to download
 ## 2. use gdc-client to download files to cwd
@@ -51,7 +54,7 @@ def _get_num_pages(project_name, size, endpoint_name, n=None, data_category=None
                                    query_args=query_args,
                                    verify=verify,
                                    )
-    response = requests.get(endpoint, params=params)
+    response = requests_get(endpoint, params=params)
     response.raise_for_status()
     pages = response.json()['data']['pagination']['pages']
     return pages
@@ -76,7 +79,7 @@ def _get_manifest_once(project_name, size=defaults.DEFAULT_SIZE, page=0,
                                        'from': from_param,  ## wrapper to avoid reserved word
                                        'sort': 'file_name:asc'})
     # requests URL-encodes automatically
-    response = requests.get(endpoint, params=params)
+    response = requests_get(endpoint, params=params)
     response.raise_for_status()
     return response
 
@@ -124,7 +127,6 @@ def get_manifest(project_name=None, n=None, data_category=None, query_args={}, v
     return manifest
 
 
-@lru_cache(None)
 @log_with()
 def get_manifest_data(*args, **kwargs):
     """ Get manifest containing files to be downloaded, as a Pandas DataFrame.
@@ -133,7 +135,6 @@ def get_manifest_data(*args, **kwargs):
     return pd.read_csv(io.StringIO(get_manifest(*args, **kwargs)), sep='\t')
 
 
-@lru_cache(None)
 @log_with()
 def download_manifest(data_dir=defaults.GDC_DATA_DIR, filename='manifest.txt', only_updates=False, *args, **kwargs):
     """ Get manifest containing files to be downloaded, and write to disk.
@@ -431,7 +432,6 @@ def get_clinical_data_from_file(xml_file, **kwargs):
     return data
 
 
-@lru_cache(maxsize=None)
 @log_with()
 def get_clinical_data(project_name, **kwargs):
     xml_files = download_clinical_files(project_name=project_name, **kwargs)

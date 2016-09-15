@@ -14,6 +14,7 @@ from query_tcga.log_with import log_with
 from query_tcga import defaults 
 from query_tcga.defaults import GDC_API_ENDPOINT
 from query_tcga import error_handling as _errors
+from query_tcga.cache import requests_get
 
 
 #### ---- tools for constructing parameters ---- 
@@ -125,7 +126,6 @@ def construct_parameters(project_name=None, data_category=None, query_args={}, v
 
 #### ---- tools for field validation ----
 
-@lru_cache(maxsize=None)
 @log_with()
 def _list_valid_fields(endpoint_name):
     """ List allowable fields for this endpoint
@@ -140,13 +140,12 @@ def _list_valid_fields(endpoint_name):
     """
     _verify_data_list(data_list=[endpoint_name], allowed_values=defaults.VALID_ENDPOINTS)
     endpoint = GDC_API_ENDPOINT.format(endpoint=endpoint_name)+'/_mapping'
-    response = requests.get(endpoint)
+    response = requests_get(endpoint)
     response.raise_for_status()
     field_names = response.json()['_mapping'].keys()
     return field_names
 
 
-@lru_cache(maxsize=None)
 @log_with()
 def _list_valid_options(field_name,
                         endpoint_name,
@@ -180,7 +179,7 @@ def _list_valid_options(field_name,
     if strip_endpoint_from_field_name:
         field_name = field_name.replace('{}.'.format(endpoint_name), '')
     params = construct_parameters(project_name=project_name, facets=field_name, size=0)
-    response = requests.get(endpoint, params=params)
+    response = requests_get(endpoint, params=params)
     response.raise_for_status()
     try:
         items = [item['key'] for item in response.json()['data']['aggregations'][field_name]['buckets']]
@@ -189,7 +188,6 @@ def _list_valid_options(field_name,
     return items
 
 
-@lru_cache(maxsize=None)
 @log_with()
 def _verify_field_name(field_name, endpoint_name):
     """ Verify that field exists for this endpoint
@@ -213,7 +211,6 @@ def _verify_field_name(field_name, endpoint_name):
     return found
 
 
-@lru_cache(maxsize=None)
 @log_with()
 def _search_for_field(search_string, endpoint_name):
     fields = _list_valid_fields(endpoint_name=endpoint_name)
@@ -239,7 +236,6 @@ def _verify_data_list(data_list, allowed_values, message='At least one value giv
         raise ValueError('{message}: {bad_values}'.format(bad_values=', '.join(bad_values), message=message))
     return True
 
-# @lru_cache(maxsize=None)
 @log_with()
 def _verify_field_values(data_list, field_name, endpoint_name, project_name=None):
     """ Verify that each element in a given list is among the allowed_values

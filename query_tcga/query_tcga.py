@@ -38,7 +38,7 @@ VALID_ENDPOINTS = ['files', 'projects', 'cases', 'annotations']
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 ## -- DO -- :
 ## 1. generate manifest / list of files to download
@@ -463,6 +463,10 @@ def download_files(project_name, data_category, n=None, page_size=50, max_pages=
                     for row in all_manifest.splitlines() 
                     if row.split('\t')[1] in failed_files 
                     or row.split('\t')[0] == 'id']
+
+    if len(manifest_data)==0:
+        return verify_download(io.StringIO(all_manifest), data_dir=data_dir)
+
     # join manifest data into a single string
     manifest_data = '\n'.join(manifest_data)
 

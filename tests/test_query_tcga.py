@@ -42,7 +42,7 @@ def test_list_valid_options():
      'Copy Number Variation',
      'Biospecimen',
      'Clinical']
-    res = qt._list_valid_options('data_category')
+    res = qt._list_valid_options('data_category', endpoint_name='files')
     assert isinstance(res, list)
     assert set(res) == set(expected)
     assert set(qt._list_valid_options('files.data_category', endpoint_name='files')) == set(expected)
@@ -64,8 +64,10 @@ def test_verify_field_values():
 
 
 def test_verify_data_list():
-    assert qt._verify_data_list(['Clinical'], allowed_values=['Clinical', 'Biospecimen']) == True
-    assert qt._verify_data_list(['Clinical'], allowed_values=qt._list_valid_options('data_category')) == True
+    assert qt._verify_data_list(['Clinical'],
+                                allowed_values=['Clinical', 'Biospecimen']) == True
+    assert qt._verify_data_list(['Clinical'],
+                                allowed_values=qt._list_valid_options('data_category', endpoint_name='files')) == True
     with pytest.raises(ValueError):
         qt._verify_data_list(['TCGA-BLCA'], allowed_values=['Clinical'])
 
@@ -88,14 +90,24 @@ def test_get_manifest():
 ## doesn't work now b/c doesn't have a path
 # http://doc.pytest.org/en/latest/_modules/_pytest/tmpdir.html
 def test_download_files():
-    shutil.rmtree('tests/test_data')
-    res = qt._download_files(project_name='TCGA-BLCA', data_category='Clinical', max_pages=1, page_size=5, data_dir='tests/test_data')
+    _rmdir_if_exists('tests/test_data')
+    res = qt.download_files(project_name='TCGA-BLCA', data_category='Clinical', max_pages=1, page_size=5, data_dir='tests/test_data')
+    assert isinstance(res, list)
+    assert len(res) == 5
+    res = qt.download_files(project_name='TCGA-BLCA', data_category='Clinical', n=5, data_dir='tests/test_data')
     assert isinstance(res, list)
     assert len(res) == 5
 
 
+def _rmdir_if_exists(*args, **kwargs):
+    try:
+        shutil.rmtree(*args, **kwargs)
+    except FileNotFoundError:
+        pass
+
+
 def test_download_clinical_files():
-    shutil.rmtree('tests/test_data')
+    _rmdir_if_exists('tests/test_data')
     res = qt.download_clinical_files(project_name='TCGA-BLCA', max_pages=1, page_size=5, data_dir='tests/test_data')
     assert isinstance(res, list)
     assert len(res) == 5
@@ -111,10 +123,10 @@ def test_get_clinical_data():
 
 
 def test_list_failed_downloads():
-    shutil.rmtree('tests/test_data')
+    _rmdir_if_exists('tests/test_data')
     manifest_data = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', data_dir='tests/test_data')
     failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir='tests/test_data')
-    assert len(failed) == len(manifest_file.splitrows())
+    assert len(failed) == len(manifest_data.splitrows())
     qt.download_clinical_files(project_name='TCGA-BLCA', max_pages=1, page_size=5, data_dir='tests/test_data')
     new_failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir='tests/test_data')
     assert isinstance(new_failed, list)

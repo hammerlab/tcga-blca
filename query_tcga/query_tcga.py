@@ -8,7 +8,8 @@ import numpy as np
 import tempfile
 import bs4
 import logging
-from query_tcga.log_with import *
+from functools import lru_cache
+from query_tcga.log_with import log_with
 
 ## -- GIVEN -- :
 ## location of token authorizing download
@@ -49,7 +50,28 @@ log.setLevel(logging.DEBUG)
 #### ---- generate manifest / list of files to download ----
 
 @log_with()
-def _construct_filter_parameters(project_name, endpoint_name, **kwargs):
+def _construct_filter_element(field, value, op='in', endpoint_name=None):
+    """ construct dict element representing an atomic unit of a filter.
+        if endpoint_name is None, assume endpoint is given as part of the field
+            (and parse out endpoint_name for field checking)
+    """
+    if endpoint_name:
+        field_name = '{}.{}'.format(endpoint_name, field)
+    else:
+        field_name = field
+        endpoint_name = field.split('.')[0]
+    field_value = _convert_to_list(value)
+    _verify_field_values(data_list=field_value, field_name=field_name, endpoint_name=endpoint_name)
+    filt = {"op": op,
+                "content": {
+                    "field": field_name,
+                    "value": field_value
+                }
+        }
+    return filt
+
+@log_with()
+def _construct_filter_parameters(project_name=None, endpoint_name=None, data_category=None, query_args={}):
     """ construct filter-json given project name & files requested
 
     Examples
@@ -65,24 +87,24 @@ def _construct_filter_parameters(project_name, endpoint_name, **kwargs):
     """
     content_filters = list()
     if project_name:
-        filt_project = {"op": "in",
-                "content": {
-                    "field": "cases.project.project_id",
-                    "value": [project_name]
-                }
-        }
+        filt_project = _construct_filter_element(field='cases.project.project_id',
+                                                 value=project_name
+                                                 )
         content_filters.append(filt_project)
-    query_params = dict(**kwargs)
-    for field in query_params:
-        field_name = "{endpoint}.{field}".format(endpoint=endpoint_name, field=field)
-        _verify_field_values(data_list=_convert_to_list(query_params[field]), field_name=field_name, endpoint_name=endpoint_name)
-        next_filter = {"op": "in",
-                "content": {
-                    "field": field_name,
-                    "value": _convert_to_list(query_params[field])
-                }
-        }
-        content_filters.append(next_filter)
+    if data_category:
+        filt_category = _construct_filter_element(field='files.data_category',
+                                                 value=data_category
+                                                 )
+        content_filters.append(filt_category)
+    if query_args:
+        if query_args['data_category'] or query_args['files.data_category']:
+            raise ValueError('Flexible filtering by data_category not yet implemented.')
+        for field in query_args:
+            next_filter = _construct_filter_element(field=field,
+                                                     value=query_params[field],
+                                                     endpoint_name=endpoint_name
+                                                     )
+            content_filters.append(next_filter)
     filt = {"op": "and",
             "content": content_filters
             }
@@ -122,7 +144,7 @@ def _compute_start_given_page(page, size):
 
 
 @log_with()
-def _construct_parameters(endpoint_name, project_name=None, size=None, **kwargs):
+def _construct_parameters(endpoint_name=None, project_name=None, size=None, data_category=None, query_args={}):
     """ Construct query parameters given project name & list of data categories
 
     >>> _construct_parameters(project_name='TCGA-BLCA', endpoint_name='files', data_category='Clinical', size=5)
@@ -132,7 +154,10 @@ def _construct_parameters(endpoint_name, project_name=None, size=None, **kwargs)
     """
     params = {}
     if project_name or dict(**kwargs):
-        filt = _construct_filter_parameters(project_name=project_name, endpoint_name=endpoint_name, **kwargs)
+        filt = _construct_filter_parameters(project_name=project_name,
+                                            endpoint_name=endpoint_name,
+                                            data_category=data_category,
+                                            query_args=query_args)
         params.update({'filters': json.dumps(filt)})
 
     if size:
@@ -141,14 +166,16 @@ def _construct_parameters(endpoint_name, project_name=None, size=None, **kwargs)
     return params
 
 
+@lru_cache(maxsize=None)
 @log_with()
-def _search_for_field(search_string, endpoint_name='files'):
+def _search_for_field(search_string, endpoint_name):
     fields = _list_valid_fields(endpoint_name=endpoint_name)
     return [field for field in fields if field.find(search_string)>0]
 
 
+@lru_cache(maxsize=None)
 @log_with()
-def _list_valid_fields(endpoint_name='files'):
+def _list_valid_fields(endpoint_name):
     """ List allowable fields for this endpoint
 
     >>> res = _list_valid_fields(endpoint_name='files')
@@ -170,16 +197,19 @@ def _list_valid_fields(endpoint_name='files'):
     return field_names
 
 
+@lru_cache(maxsize=None)
 @log_with()
-def _list_valid_options(field_name, endpoint_name='files',
-                        project_name=None, strip_endpoint_from_field_name=True):
+def _list_valid_options(field_name,
+                        endpoint_name,
+                        project_name=None,
+                        strip_endpoint_from_field_name=True):
     """ List valid options (values) for a field.
 
     Note that field names are listed without prefix (as 'data_category') when given as a facet. This function
       masks that complexity by stripping out the endpoint from the field name by default. (the default behavior
       can be turned off using parameter `strip_endpoint_from_field_name=False`)
 
-    >>> _list_valid_options('data_category')
+    >>> _list_valid_options('data_category', endpoint_name='files')
     ['Simple Nucleotide Variation',
      'Transcriptome Profiling',
      'Raw Sequencing Data',
@@ -196,25 +226,19 @@ def _list_valid_options(field_name, endpoint_name='files',
       'Clinical']
 
     >>> _list_valid_options('files.data_category', endpoint_name='files', strip_endpoint_from_field_name=False)
-    ValueError: Server responded with: {'data': {'pagination': {'from': 1, 'count': 0, 'total': 262293, 'sort': '', 'size': 0, 'page': 1, 'pages': 262293}, 'hits': []}, 'warnings': {'facets': 'unrecognized values: [files.data_category]'}}
+    ValueError: Server responded with: ... 'warnings': {'facets': 'unrecognized values: [files.data_category]'}}
 
 
     """
     # according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
     # this is the best way to query the endpoint for values
     endpoint = GDC_API_ENDPOINT.format(endpoint=endpoint_name)
+    filters = list()
     if project_name:
-        filt_project = {"op": "in",
-            "content": {
-                "field": "cases.project.project_id",
-                "value": [project_name]  ## for performance reasons, filter to a project
-            }
-        }
-    else:
-        filt_project = None
+        filters.append(_construct_filter_element(field="cases.project.project_id", value=project_name))
     if strip_endpoint_from_field_name:
         field_name = field_name.replace('{}.'.format(endpoint_name), '')
-    params = {'filters': json.dumps(filt_project),
+    params = {'filters': json.dumps(filters),
               'facets': field_name,
               'size': 0}
     response = requests.get(endpoint, params=params)
@@ -226,6 +250,7 @@ def _list_valid_options(field_name, endpoint_name='files',
     return items
 
 
+@lru_cache(maxsize=None)
 @log_with()
 def _verify_field_name(field_name, endpoint_name):
     """ Verify that field exists for this endpoint
@@ -304,7 +329,7 @@ def _raise_error_parsing_result(response):
 
 
 @log_with()
-def _get_num_pages(project_name, size, endpoint_name, **kwargs):
+def _get_num_pages(project_name, size, endpoint_name, data_category=None, query_args={}):
     """ Get total number of pages for given criteria
 
     >>> _get_num_pages('TCGA-BLCA', data_category=['Clinical'], size=5)
@@ -312,7 +337,12 @@ def _get_num_pages(project_name, size, endpoint_name, **kwargs):
 
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    params = _construct_parameters(project_name=project_name, endpoint_name=endpoint_name, size=size, **kwargs)
+    params = _construct_parameters(project_name=project_name,
+                                   endpoint_name=endpoint_name,
+                                   size=size,
+                                   data_category=data_category,
+                                   query_args=query_args,
+                                   )
     response = requests.get(endpoint, params=params)
     response.raise_for_status()
     try:
@@ -323,14 +353,19 @@ def _get_num_pages(project_name, size, endpoint_name, **kwargs):
 
 
 @log_with()
-def _get_manifest_once(project_name, size, page=0, **kwargs):
+def _get_manifest_once(project_name, size, page=0, data_category=None, query_args={}):
     """ Single get for manifest of files matching project_name & categories
 
-    >>> _get_manifest_once('TCGA-BLCA', data_category=['Clinical'], size=5)
+    >>> _get_manifest_once('TCGA-BLCA', query_args=dict(data_category=['Clinical']), size=5)
     <Response [200]>
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    params = _construct_parameters(project_name=project_name, endpoint_name='files', size=size, **kwargs)
+    params = _construct_parameters(project_name=project_name,
+                                   endpoint_name='files',
+                                   size=size,
+                                   data_category=data_category,
+                                   query_args=query_args,
+                                   )
     from_param = _compute_start_given_page(page=page, size=size)
     extra_params = {
         'return_type': 'manifest',
@@ -344,22 +379,30 @@ def _get_manifest_once(project_name, size, page=0, **kwargs):
 
 
 @log_with()
-def get_manifest(project_name, size=100, pages=None, **kwargs):
+def get_manifest(project_name, n=None, size=100, pages=None, data_category=None, query_args={}):
     """ get manifest containing for all results matching project_name & categories
 
-    >>> get_manifest(project_name='TCGA-BLCA', data_category=['Clinical'], pages=2, size=2)
+    >>> get_manifest(project_name='TCGA-BLCA', query_args=dict(data_category=['Clinical']), pages=2, size=2)
     'id\tfilename\tmd5\tsize\tstate\n...'
     """
     output = io.StringIO()
     if not(pages):
-        pages = _get_num_pages(project_name=project_name, endpoint_name='files', size=size, **kwargs)
+        pages = _get_num_pages(project_name=project_name, endpoint_name='files',
+                             data_category=data_category,
+                             size=size, query_args=query_args)
     for page in np.arange(pages):
-        response = _get_manifest_once(project_name=project_name, page=page, size=size, **kwargs)
+        response = _get_manifest_once(project_name=project_name,
+                                     data_category=data_category,
+                                     page=page, size=size, query_args=query_args)
         response_text = response.text.splitlines()
         if page>0:
             del response_text[0]
         [output.write(line+'\n') for line in response_text]
-    return output.getvalue()
+    manifest = output.getvalue()
+    if n:
+        manifest = output.getvalue().splitlines()
+        manifest = '\n'.join(manifest[0:n])
+    return manifest
 
 
 #### ---- download files ----
@@ -375,7 +418,8 @@ def _mkdir_if_not_exists(dir):
 
 
 @log_with()
-def _download_files(project_name, data_category, page_size=50, max_pages=None, data_dir=GDC_DATA_DIR, **kwargs):
+def download_files(project_name, data_category, n=None, page_size=50, max_pages=None,
+                    data_dir=GDC_DATA_DIR, query_args={}):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -393,13 +437,24 @@ def _download_files(project_name, data_category, page_size=50, max_pages=None, d
     _mkdir_if_not_exists(data_dir)
     # get all manifest data
     all_manifest = get_manifest(project_name=project_name,
-                                       data_category=data_category,
-                                       size=page_size, pages=max_pages, **kwargs)
-    # identify only files that have not yet downloaded
-    failed_downloads = _list_failed_downloads(manifest_file = io.StringIO(all_manifest), data_dir=data_dir)
+                                data_category=data_category, n=n,
+                                size=page_size, pages=max_pages,
+                                query_args=query_args)
+
+    ## prep manifest data
+    # identify files that have not yet downloaded
+    failed_downloads = _list_failed_downloads(manifest_file = io.StringIO(all_manifest),
+                                             data_dir=data_dir)
     failed_files = [os.path.basename(f) for f in failed_downloads]
-    # prep revised manifest file
-    manifest_data = '\n'.join([row for row in all_manifest.splitlines() if row.split('\t')[1] in failed_files or row.split('\t')[0] == 'id'])
+    manifest_data = [row 
+                    for row in all_manifest.splitlines() 
+                    if row.split('\t')[1] in failed_files 
+                    or row.split('\t')[0] == 'id']
+    # join manifest data into a single string
+    manifest_data = '\n'.join(manifest_data)
+
+    ## prepare to write manifest data to file
+    ## and execute gdc-client
     manifest_file = tempfile.NamedTemporaryFile()
     try:
         # write manifest contents to disk
@@ -418,7 +473,7 @@ def _download_files(project_name, data_category, page_size=50, max_pages=None, d
 
 
 @log_with()
-def download_clinical_files(project_name, **kwargs):
+def download_clinical_files(project_name, n=None, data_dir=GDC_DATA_DIR, **kwargs):
     """ Download clinical files for this project to the data_dir
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -427,7 +482,9 @@ def download_clinical_files(project_name, **kwargs):
     Parameters
     -----------
       project_name (string, required): Name of project, ie 'TCGA-BLCA', 'TCGA-BRCA', etc
+      n (int, optional): number of files to download (default: None - downloads all)
       data_dir (string, optional): directory in which to save downloaded files. defaults to 'data/gdc'
+      query_args (dict, optional): fields to use when filtering result (other than project & data_category)
 
     Other parameters (mostly useful for testing)
     -----------
@@ -435,7 +492,8 @@ def download_clinical_files(project_name, **kwargs):
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 
     """
-    return _download_files(project_name=project_name, data_category=['Clinical'], **kwargs)
+    ## update kwargs with parameters listed explicitly above (for readability)
+    return download_files(project_name=project_name, data_category=['Clinical'], n=n, data_dir=data_dir, **kwargs)
 
 
 
@@ -461,7 +519,7 @@ def _verify_download_single_file(row, data_dir=os.getcwd()):
 
 
 @log_with()
-def _list_failed_downloads(manifest_file = None, manifest_data = None, data_dir=os.getcwd()):
+def _list_failed_downloads(manifest_file=None, manifest_data=None, data_dir=os.getcwd()):
     """
     """
     if manifest_file and not(manifest_data):
@@ -480,13 +538,15 @@ class FailedDownloadError(ValueError):
     pass
 
 @log_with()
-def verify_download(manifest_file, data_dir=os.getcwd()):
+def verify_download(manifest_file, data_dir=GDC_DATA_DIR):
     """ Verify that files listed in the manifest exist in data_dir
     """
     failed_downloads = list()
     manifest_data = _read_manifest_data(manifest_file)
     try:
-        downloaded = list(manifest_data.apply(lambda row: _verify_download_single_file(row, data_dir=data_dir), axis=1))
+        downloaded = list(manifest_data.apply(lambda row:
+             _verify_download_single_file(row, data_dir=data_dir),
+              axis=1))
     except FailedDownloadError as e:
         failed_downloads.append(str(e))
 
@@ -567,6 +627,7 @@ def _get_clinical_data_from_file(xml_file, **kwargs):
     return data
 
 
+@lru_cache(maxsize=None)
 @log_with()
 def get_clinical_data(project_name, **kwargs):
     xml_files = download_clinical_files(project_name=project_name, **kwargs)
@@ -580,7 +641,7 @@ def get_clinical_data(project_name, **kwargs):
 #### ---- download WXS bams for tumor & normal samples ---- 
 
 @log_with()
-def _get_case_data(size=1, page=1, case_uuid=None, project_name=None, fields=None, **kwargs):
+def _get_case_data(size=1, page=1, case_uuid=None, project_name=None, fields=None, query_args={}):
     """ Single get for manifest of files matching project_name & categories
 
     >>> _get_manifest_once('TCGA-BLCA', data_category=['Clinical'], size=5)
@@ -591,7 +652,9 @@ def _get_case_data(size=1, page=1, case_uuid=None, project_name=None, fields=Non
         endpoint = endpoint+'/{}'.format(case_uuid)
         params = dict()
     else:
-        params = _construct_parameters(project_name=project_name, size=size, endpoint_name='cases', **kwargs)
+        params = _construct_parameters(project_name=project_name,
+                                     size=size, endpoint_name='cases',
+                                    query_args={})
         from_param = _compute_start_given_page(page=page, size=size)
         extra_params = {
             'from': from_param,
@@ -611,7 +674,7 @@ def _get_sample_data():
 
 
 @log_with()
-def download_wxs_files(project_name, **kwargs):
+def download_wxs_files(project_name, query_args={}, **kwargs):
     """ Download sequencing files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -629,6 +692,9 @@ def download_wxs_files(project_name, **kwargs):
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 
     """
-    return _download_files(project_name=project_name, data_category=['Raw Sequencing Data'], experimental_strategy='WXS', **kwargs)
+    files = download_files(project_name=project_name, data_category=['Raw Sequencing Data'],
+             query_args=query_args.update(dict(experimental_strategy='WXS')), **kwargs)
+
+    return files
 
 

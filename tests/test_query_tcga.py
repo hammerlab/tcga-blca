@@ -6,7 +6,7 @@ import pandas as pd
 
 
 def test_construct_filter_parameters():
-   res = qt._construct_filter_parameters(project_name='TCGA-BLCA', data_category='Clinical')
+   res = qt._construct_filter_parameters(project_name='TCGA-BLCA', data_category='Clinical', endpoint_name='files')
    expects = {'content': [
         {'content': {'field': 'cases.project.project_id', 'value': ['TCGA-BLCA']}, 'op': 'in'},
         {'content': {'field': 'files.data_category', 'value': ['Clinical']}, 'op': 'in'}
@@ -24,7 +24,7 @@ def test_convert_to_list():
 def test_construct_parameters():
     ## minimal testing because dictionary (which is converted to string) 
     ## isn't always in same order. *could* sort the dict, but prob isn't necessary
-    assert list(qt._construct_parameters(project_name='TCGA-BLCA', size=5).keys()).sort() == ['filters','size'].sort()
+    assert list(qt._construct_parameters(project_name='TCGA-BLCA', size=5, endpoint_name='files').keys()).sort() == ['filters','size'].sort()
 
 
 def test_list_valid_fields():
@@ -71,7 +71,7 @@ def test_verify_data_list():
 
 
 def test_get_num_pages():
-    assert isinstance(qt._get_num_pages(project_name='TCGA-BLCA', data_category=['Clinical'], size=5), int)
+    assert isinstance(qt._get_num_pages(project_name='TCGA-BLCA', data_category=['Clinical'], size=5, endpoint_name='files'), int)
 
 
 def test_get_manifest_once():
@@ -109,5 +109,14 @@ def test_get_clinical_data():
     assert '_source_desc' in res.columns
     assert 'patient_id' in res.columns
 
+
+def test_list_failed_downloads():
+    shutil.rmtree('tests/test_data')
+    manifest_data = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', data_dir='tests/test_data')
+    failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir='tests/test_data')
+    assert len(failed) == len(manifest_file.splitrows())
+    qt.download_clinical_files(project_name='TCGA-BLCA', max_pages=1, page_size=5, data_dir='tests/test_data')
+    new_failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir='tests/test_data')
+    assert isinstance(new_failed, list)
 
 

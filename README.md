@@ -1,6 +1,6 @@
 # tcga-blca
 
-Example using [Cohorts](http://github.com/hammerlab/cohorts)to manage TCGA-BLCA for analysis
+Example using [Cohorts](http://github.com/hammerlab/cohorts) to manage TCGA-BLCA for analysis
 
 1. Query GDC for clinical and sample datasets for TCGA-BLCA data (query code to be merged into [pygdc](http://github.com/arahuja/pygdc))
 2. Set up a Cohort using [Cohorts](http://github.com/hammerlab/cohorts) to manage these data

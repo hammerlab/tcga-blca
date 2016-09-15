@@ -19,8 +19,10 @@ Once you have those two items set up, you can run one or both of the `refresh_*.
 
 # Testing
 
-Test cases are written in [pytest](). 
+Test cases are written in [pytest](http://docs.pytest.org/en/latest/). 
 
-To run test cases, use:
-  python -m pytest tests --exitfirst -v
+For example, you can run test cases as follows:
 
+```
+python -m pytest tests --exitfirst -v
+```

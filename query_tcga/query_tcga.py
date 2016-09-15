@@ -50,7 +50,7 @@ log.setLevel(logging.DEBUG)
 #### ---- generate manifest / list of files to download ----
 
 @log_with()
-def _construct_filter_element(field, value, op='in', endpoint_name=None):
+def _construct_filter_element(field, value, op='in', endpoint_name=None, verify=False):
     """ construct dict element representing an atomic unit of a filter.
         if endpoint_name is None, assume endpoint is given as part of the field
             (and parse out endpoint_name for field checking)
@@ -61,7 +61,8 @@ def _construct_filter_element(field, value, op='in', endpoint_name=None):
         field_name = field
         endpoint_name = field.split('.')[0]
     field_value = _convert_to_list(value)
-    _verify_field_values(data_list=field_value, field_name=field_name, endpoint_name=endpoint_name)
+    if verify:
+        _verify_field_values(data_list=field_value, field_name=field_name, endpoint_name=endpoint_name)
     filt = {"op": op,
                 "content": {
                     "field": field_name,
@@ -71,7 +72,8 @@ def _construct_filter_element(field, value, op='in', endpoint_name=None):
     return filt
 
 @log_with()
-def _construct_filter_parameters(project_name=None, endpoint_name=None, data_category=None, query_args={}):
+def _construct_filter_parameters(project_name=None, endpoint_name=None,
+                                 data_category=None, query_args={}, verify=False):
     """ construct filter-json given project name & files requested
 
     Examples
@@ -88,12 +90,12 @@ def _construct_filter_parameters(project_name=None, endpoint_name=None, data_cat
     content_filters = list()
     if project_name:
         filt_project = _construct_filter_element(field='cases.project.project_id',
-                                                 value=project_name
+                                                 value=project_name, verify=verify
                                                  )
         content_filters.append(filt_project)
     if data_category:
         filt_category = _construct_filter_element(field='files.data_category',
-                                                 value=data_category
+                                                 value=data_category, verify=verify
                                                  )
         content_filters.append(filt_category)
     if query_args:
@@ -144,7 +146,8 @@ def _compute_start_given_page(page, size):
 
 
 @log_with()
-def _construct_parameters(endpoint_name=None, project_name=None, size=None, data_category=None, query_args={}):
+def _construct_parameters(endpoint_name=None, project_name=None, data_category=None, 
+                         size=None, query_args={}, verify=False):
     """ Construct query parameters given project name & list of data categories
 
     >>> _construct_parameters(project_name='TCGA-BLCA', endpoint_name='files', data_category='Clinical', size=5)
@@ -157,7 +160,8 @@ def _construct_parameters(endpoint_name=None, project_name=None, size=None, data
         filt = _construct_filter_parameters(project_name=project_name,
                                             endpoint_name=endpoint_name,
                                             data_category=data_category,
-                                            query_args=query_args)
+                                            query_args=query_args,
+                                            verify=verify)
         params.update({'filters': json.dumps(filt)})
 
     if size:
@@ -329,7 +333,7 @@ def _raise_error_parsing_result(response):
 
 
 @log_with()
-def _get_num_pages(project_name, size, endpoint_name, data_category=None, query_args={}):
+def _get_num_pages(project_name, size, endpoint_name, data_category=None, query_args={}, verify=False):
     """ Get total number of pages for given criteria
 
     >>> _get_num_pages('TCGA-BLCA', data_category=['Clinical'], size=5)
@@ -342,6 +346,7 @@ def _get_num_pages(project_name, size, endpoint_name, data_category=None, query_
                                    size=size,
                                    data_category=data_category,
                                    query_args=query_args,
+                                   verify=verify,
                                    )
     response = requests.get(endpoint, params=params)
     response.raise_for_status()
@@ -353,7 +358,7 @@ def _get_num_pages(project_name, size, endpoint_name, data_category=None, query_
 
 
 @log_with()
-def _get_manifest_once(project_name, size, page=0, data_category=None, query_args={}):
+def _get_manifest_once(project_name, size, page=0, data_category=None, query_args={}, verify=False):
     """ Single get for manifest of files matching project_name & categories
 
     >>> _get_manifest_once('TCGA-BLCA', query_args=dict(data_category=['Clinical']), size=5)
@@ -365,6 +370,7 @@ def _get_manifest_once(project_name, size, page=0, data_category=None, query_arg
                                    size=size,
                                    data_category=data_category,
                                    query_args=query_args,
+                                   verify=verify,
                                    )
     from_param = _compute_start_given_page(page=page, size=size)
     extra_params = {
@@ -379,21 +385,24 @@ def _get_manifest_once(project_name, size, page=0, data_category=None, query_arg
 
 
 @log_with()
-def get_manifest(project_name, n=None, size=100, pages=None, data_category=None, query_args={}):
+def get_manifest(project_name, n=None, size=100, pages=None, data_category=None, query_args={}, verify=False):
     """ get manifest containing for all results matching project_name & categories
 
     >>> get_manifest(project_name='TCGA-BLCA', query_args=dict(data_category=['Clinical']), pages=2, size=2)
     'id\tfilename\tmd5\tsize\tstate\n...'
     """
+    if n and size > n:
+        size = n
+        pages = 1
     output = io.StringIO()
     if not(pages):
         pages = _get_num_pages(project_name=project_name, endpoint_name='files',
                              data_category=data_category,
-                             size=size, query_args=query_args)
+                             size=size, query_args=query_args, verify=verify)
     for page in np.arange(pages):
         response = _get_manifest_once(project_name=project_name,
                                      data_category=data_category,
-                                     page=page, size=size, query_args=query_args)
+                                     page=page, size=size, query_args=query_args, verify=verify)
         response_text = response.text.splitlines()
         if page>0:
             del response_text[0]
@@ -419,11 +428,15 @@ def _mkdir_if_not_exists(dir):
 
 @log_with()
 def download_files(project_name, data_category, n=None, page_size=50, max_pages=None,
-                    data_dir=GDC_DATA_DIR, query_args={}):
+                    data_dir=GDC_DATA_DIR, query_args={}, verify=False):
     """ Download files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
         3. Verify that files downloaded as expected
+
+    Parameters
+    --------------
+      verify (boolean, optional): if True, verify each name-value pair in the query_args dict
 
     >>> _download_files(project_name='TCGA-BLCA', data_category='Clinical', max_pages=1, page_size=5)
     100% [##############################] Time: 0:00:00
@@ -439,7 +452,7 @@ def download_files(project_name, data_category, n=None, page_size=50, max_pages=
     all_manifest = get_manifest(project_name=project_name,
                                 data_category=data_category, n=n,
                                 size=page_size, pages=max_pages,
-                                query_args=query_args)
+                                query_args=query_args, verify=verify)
 
     ## prep manifest data
     # identify files that have not yet downloaded
@@ -488,6 +501,7 @@ def download_clinical_files(project_name, n=None, data_dir=GDC_DATA_DIR, **kwarg
 
     Other parameters (mostly useful for testing)
     -----------
+      verify (boolean, optional): if True, verify each name-value pair in the query_args dict
       page_size (int, optional): how many records to list per page (default 50)
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 
@@ -684,10 +698,11 @@ def download_wxs_files(project_name, query_args={}, **kwargs):
     -----------
       project_name (string, required): Name of project, ie 'TCGA-BLCA', 'TCGA-BRCA', etc
       data_dir (string, optional): directory in which to save downloaded files. defaults to 'data/gdc'
-      **kwargs (optional): other filters to apply (e.g. experimental_strategy=["WXS", "RNA-Seq", "Genotyping Array", "miRNA-Seq"])
+      query_args (dict, optional): other filters to apply (e.g. experimental_strategy=["WXS", "RNA-Seq", "Genotyping Array", "miRNA-Seq"])
 
     Other parameters (mostly useful for testing)
     -----------
+      verify (boolean, optional): if True, verify each name-value pair in the query_args dict
       page_size (int, optional): how many records to list per page (default 50)
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 

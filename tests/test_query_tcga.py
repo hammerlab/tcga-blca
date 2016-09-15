@@ -94,6 +94,8 @@ def test_download_files():
     res = qt.download_files(project_name='TCGA-BLCA', data_category='Clinical', max_pages=1, page_size=5, data_dir='tests/test_data')
     assert isinstance(res, list)
     assert len(res) == 5
+
+def test_download_files_using_n():
     res = qt.download_files(project_name='TCGA-BLCA', data_category='Clinical', n=5, data_dir='tests/test_data')
     assert isinstance(res, list)
     assert len(res) == 5
@@ -124,11 +126,12 @@ def test_get_clinical_data():
 
 def test_list_failed_downloads():
     _rmdir_if_exists('tests/test_data')
-    manifest_data = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', data_dir='tests/test_data')
+    manifest_data = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', n=5)
     failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir='tests/test_data')
-    assert len(failed) == len(manifest_data.splitrows())
+    assert len(failed) == 5
     qt.download_clinical_files(project_name='TCGA-BLCA', max_pages=1, page_size=5, data_dir='tests/test_data')
     new_failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir='tests/test_data')
     assert isinstance(new_failed, list)
+    assert len(new_failed) == 0
 
 

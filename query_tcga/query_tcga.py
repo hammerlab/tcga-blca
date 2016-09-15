@@ -153,7 +153,7 @@ def _construct_parameters(endpoint_name=None, project_name=None, size=None, data
      'size': 5}
     """
     params = {}
-    if project_name or dict(**kwargs):
+    if any([project_name, data_category, query_args]):
         filt = _construct_filter_parameters(project_name=project_name,
                                             endpoint_name=endpoint_name,
                                             data_category=data_category,
@@ -642,9 +642,9 @@ def get_clinical_data(project_name, **kwargs):
 
 @log_with()
 def _get_case_data(size=1, page=1, case_uuid=None, project_name=None, fields=None, query_args={}):
-    """ Single get for manifest of files matching project_name & categories
+    """ Get single case json matching project_name & categories
 
-    >>> _get_manifest_once('TCGA-BLCA', data_category=['Clinical'], size=5)
+    >>> _get_case_data(project_name='TCGA-BLCA', data_category=['Clinical'], size=5)
     <Response [200]>
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='cases')

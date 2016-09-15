@@ -401,7 +401,7 @@ def get_manifest(project_name, n=None, size=100, pages=None, data_category=None,
     manifest = output.getvalue()
     if n:
         manifest = output.getvalue().splitlines()
-        manifest = '\n'.join(manifest[0:n])
+        manifest = '\n'.join(manifest[0:n+1])
     return manifest
 
 

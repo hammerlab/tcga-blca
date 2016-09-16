@@ -55,32 +55,17 @@ def _get_data(endpoint_name, arg=None,
 
 
 @log_with()
-def _get_case_data(size=1, page=1, case_uuid=None, project_name=None, fields=None, query_args={}):
+def _get_case_data(arg=None,
+              project_name=None, fields=None, size=defaults.DEFAULT_SIZE, page=1,
+              data_category=None, query_args={}, verify=False, **kwargs):
     """ Get single case json matching project_name & categories
 
     >>> _get_case_data(project_name='TCGA-BLCA', data_category=['Clinical'], size=5)
     <Response [200]>
     """
-    endpoint = GDC_API_ENDPOINT.format(endpoint='cases')
-    if case_uuid:
-        endpoint = endpoint+'/{}'.format(case_uuid)
-        params = dict()
-    else:
-        from_param = _compute_start_given_page(page=page, size=size)
-        params = _params.construct_parameters(project_name=project_name,
-                                              size=size,
-                                              endpoint_name='cases',
-                                              query_args=query_args)
-        extra_params = {
-            'from': from_param,
-            }
-        if fields:
-            extra_params.update({'fields': ','.join(_convert_to_list(fields))})
-            params=dict(params, **extra_params)
-    # requests URL-encodes automatically
-    response = requests_get(endpoint, params=params)
-    response.raise_for_status()
-    return response
+    return _get_data(endpoint='cases', arg=arg, project_name=project_name, fields=fields, size=size,
+                    page=page, data_category=data_category, query_args=query_args,
+                    verify=verify, **kwargs)
 
 
 @log_with()
@@ -90,7 +75,8 @@ def _get_sample_data():
 
 
 @log_with()
-def _get_file_metadata(project_name=None, data_category=None, fields=defaults.DEFAULT_FILE_FIELDS, query_args={}, **kwargs):
+def _get_file_metadata(project_name=None, data_category=None, fields=defaults.DEFAULT_FILE_FIELDS,
+                       query_args={}, **kwargs):
     response = _get_data(endpoint_name='files', data_category=data_category,
                     query_args=query_args, fields=fields, format='tsv', **kwargs)
     df = pd.read_csv(io.StringIO(response.text), sep='\t')

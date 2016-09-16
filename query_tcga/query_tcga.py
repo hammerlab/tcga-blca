@@ -465,7 +465,7 @@ def get_clinical_data_from_file(xml_file, **kwargs):
     data['_source_type'] = 'XML'
     data['_source_desc'] = xml_file
     data['patient_id'] = soup.findChild('patient_id').text
-    data['file_uuid'] = soup.findChild('file_uuid').text
+    data['_source_file_uuid'] = os.path.split(os.path.dirname(data['_source_desc'][0]))[1]
     return data
 
 

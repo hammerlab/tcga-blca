@@ -64,7 +64,7 @@ def _construct_filter_parameters(project_name=None, data_category=None, query_ar
                                                  )
         content_filters.append(filt_category)
     if query_args:
-        if query_args['data_category'] or query_args['files.data_category']:
+        if 'data_category' in query_args.keys() or 'files.data_category' in query_args.keys():
             raise ValueError('Flexible filtering by data_category not yet implemented.')
         for field in query_args:
             next_filter = _construct_filter_element(field=field,

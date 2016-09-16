@@ -1,21 +1,11 @@
 
-import requests
 import json
-import os
-import subprocess
-import pandas as pd
-import io
-import numpy as np
-import tempfile
-import bs4
-import logging
-from functools import lru_cache
 from query_tcga.log_with import log_with
 from query_tcga import defaults 
 from query_tcga.defaults import GDC_API_ENDPOINT
 from query_tcga import error_handling as _errors
 from query_tcga.cache import requests_get
-
+from query_tcga.helpers import _convert_to_list
 
 #### ---- tools for constructing parameters ---- 
 @log_with()
@@ -28,7 +18,7 @@ def _construct_filter_element(field, value, op='in', verify=False):
     endpoint_name = field.split('.')[0]
     field_value = _convert_to_list(value)
     if verify:
-        _verify_field_values(data_list=field_value, field_name=field_name)
+        _verify_field_values(data_list=field_value, field_name=field_name, endpoint_name=endpoint_name)
     filt = {"op": op,
                 "content": {
                     "field": field_name,
@@ -75,31 +65,6 @@ def _construct_filter_parameters(project_name=None, data_category=None, query_ar
             "content": content_filters
             }
     return filt
-
-
-@log_with()
-def _convert_to_list(x):
-    """ Convert x to a list if not already a list
-
-    Examples
-    -----------
-
-    >>> _convert_to_list('Clinical')
-    ['Clinical']
-    >>> _convert_to_list(['Clinical'])
-    ['Clinical']
-    >>> _convert_to_list(('Clinical','Biospecimen'))
-    ['Clinical', 'Biospecimen']
-
-    """
-    if not(x):
-        return(None)
-    elif isinstance(x, list):
-        return(x)
-    elif isinstance(x, str):
-        return([x])
-    else:
-        return(list(x))
 
 
 @log_with()
@@ -175,7 +140,6 @@ def _list_valid_options(field_name,
     # according to https://gdc-docs.nci.nih.gov/API/Users_Guide/Search_and_Retrieval/#filters-specifying-the-query
     # this is the best way to query the endpoint for values
     endpoint = GDC_API_ENDPOINT.format(endpoint=endpoint_name)
-    filters = list()
     if strip_endpoint_from_field_name:
         field_name = field_name.replace('{}.'.format(endpoint_name), '')
     params = construct_parameters(project_name=project_name, facets=field_name, size=0)

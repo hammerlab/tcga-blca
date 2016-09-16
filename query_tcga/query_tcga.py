@@ -1,5 +1,3 @@
-import requests
-import json
 import os
 import subprocess
 import pandas as pd
@@ -12,9 +10,9 @@ from query_tcga.log_with import log_with
 from query_tcga import defaults 
 from query_tcga.defaults import GDC_API_ENDPOINT
 from query_tcga import parameters as _params
-from query_tcga import error_handling as _errors
 from query_tcga import cache
 from query_tcga.cache import requests_get
+from query_tcga.helers import _compute_start_given_page
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
@@ -29,11 +27,6 @@ cache.setup_cache()
 ## 4. transform files to format needed by Cohorts (not done)
 
 
-@log_with()
-def _compute_start_given_page(page, size):
-    """ compute start / from position given page & size
-    """
-    return (page*size+1)
 
 
 @log_with()

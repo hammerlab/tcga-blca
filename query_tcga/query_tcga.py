@@ -14,10 +14,6 @@ from query_tcga import cache
 from query_tcga.cache import requests_get
 from query_tcga.helpers import _compute_start_given_page
 
-logging.basicConfig()
-log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
-
 ## cache recquets depending on value of 
 cache.setup_cache()
 ## -- DO -- :
@@ -131,7 +127,7 @@ def get_manifest_data(*args, **kwargs):
     """
     manifest_contents = get_manifest(*args, **kwargs)
     if manifest_contents != '':
-        return pd.read_csv(io.StringIO(), sep='\t')
+        return pd.read_csv(io.StringIO(manifest_contents), sep='\t')
     else:
         return None
 
@@ -470,10 +466,6 @@ def get_clinical_data_from_file(xml_file, **kwargs):
     data['_source_desc'] = xml_file
     data['patient_id'] = soup.findChild('patient_id').text
     data['file_uuid'] = soup.findChild('file_uuid').text
-    metadata = get_manifest_data(query_args={'file_id': data['file_uuid']}, 
-                                      data_category='Clinical')
-    if metadata:
-        data['case_uuid'] = metadata.loc[metadata['filename']==os.path.basename(xml_file),'id'].str
     return data
 
 

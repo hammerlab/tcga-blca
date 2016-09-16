@@ -12,7 +12,7 @@ from query_tcga.defaults import GDC_API_ENDPOINT
 from query_tcga import parameters as _params
 from query_tcga import cache
 from query_tcga.cache import requests_get
-from query_tcga.helers import _compute_start_given_page
+from query_tcga.helpers import _compute_start_given_page
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
@@ -233,7 +233,7 @@ def download_from_manifest(manifest_file=None, manifest_contents=None,
         if subprocess.check_call(exe_bash, cwd=data_dir):
             subprocess.call(exe_bash, cwd=data_dir)
         # verify that all files in original manifest have been downloaded
-        downloaded = _verify_download(io.StringIO(all_manifest_contents), data_dir=data_dir)
+        downloaded = _verify_download(manifest_contents=all_manifest_contents, data_dir=data_dir)
     finally:
         manifest_file.close()
     return downloaded
@@ -339,10 +339,6 @@ def _read_manifest_data(manifest_file):
     return manifest_data
 
 
-class FailedDownloadError(ValueError):
-    pass
-
-
 @log_with()
 def _verify_download_single_file(row, data_dir):
     """ Verify that the file indicated in the manifest exists in data_dir
@@ -378,7 +374,7 @@ def _characterize_downloads(data_dir, manifest_file=None, manifest_contents=None
     failed_downloads = list()
     downloads = list()
     for i, row in manifest_data.iterrows():
-        file_name, success = _verify_download_single_file(row, data_dir=data_dir)
+        file_name, success = _verify_download_single_file(row=row, data_dir=data_dir)
         if success:
             downloads.append(file_name)
         else:

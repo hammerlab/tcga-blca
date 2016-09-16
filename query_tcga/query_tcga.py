@@ -136,7 +136,11 @@ def get_manifest_data(*args, **kwargs):
     """ Get manifest containing files to be downloaded, as a Pandas DataFrame.
         See `get_manifest` for more details.
     """
-    return pd.read_csv(io.StringIO(get_manifest(*args, **kwargs)), sep='\t')
+    manifest_contents = get_manifest(*args, **kwargs)
+    if manifest_contents != '':
+        return pd.read_csv(io.StringIO(), sep='\t')
+    else:
+        return None
 
 
 @log_with()
@@ -471,14 +475,16 @@ def _parse_clin_data_soup(soup, **kwargs):
 
 @log_with()
 def get_clinical_data_from_file(xml_file, **kwargs):
-    metadata = get_manifest_data(data_category='Clinical')
     soup = _read_xml_bs(xml_file)
     data = _parse_clin_data_soup(soup, **kwargs)
     data['_source_type'] = 'XML'
     data['_source_desc'] = xml_file
     data['patient_id'] = soup.findChild('patient_id').text
     data['file_uuid'] = soup.findChild('file_uuid').text
-    data['case_uuid'] = metadata.loc[metadata['filename']==os.path.basename(xml_file),'id'].str
+    metadata = get_manifest_data(query_args={'file_id': data['file_uuid']}, 
+                                      data_category='Clinical')
+    if metadata:
+        data['case_uuid'] = metadata.loc[metadata['filename']==os.path.basename(xml_file),'id'].str
     return data
 
 

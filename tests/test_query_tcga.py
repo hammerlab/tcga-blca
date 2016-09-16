@@ -4,6 +4,7 @@ import pytest
 import shutil
 import pandas as pd
 import requests
+from query_tcga import error_handling as errors
 from query_tcga.log_with import log_with
 import logging
 
@@ -85,7 +86,7 @@ def test_download_files_using_n():
 def _rmdir_if_exists(*args, **kwargs):
     try:
         shutil.rmtree(*args, **kwargs)
-    except FileNotFoundError:
+    except errors.FileNotFoundError:
         pass
 
 @manifest
@@ -109,17 +110,17 @@ def test_get_clinical_data():
 @manifest
 def test_list_failed_downloads():
     _rmdir_if_exists(DATA_DIR)
-    manifest_data = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', pages=1, size=5)
-    failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir=DATA_DIR)
+    manifest_contents = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', n=5)
+    failed = qt._list_failed_downloads(manifest_contents=manifest_contents, data_dir=DATA_DIR)
     assert len(failed) == 5
     qt.download_clinical_files(project_name='TCGA-BLCA', n=5, data_dir=DATA_DIR)
-    new_failed = qt._list_failed_downloads(manifest_data=manifest_data, data_dir=DATA_DIR)
+    new_failed = qt._list_failed_downloads(manifest_contents=manifest_contents, data_dir=DATA_DIR)
     assert isinstance(new_failed, list)
     assert len(new_failed) == 0
 
 
 def test_download_from_manifest():
-    manifest_contents = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', pages=2, size=2)
+    manifest_contents = qt.get_manifest(project_name='TCGA-BLCA', data_category='Clinical', n=5)
     downloaded = qt.download_from_manifest(manifest_contents=manifest_contents, data_dir=DATA_DIR)
     assert isinstance(downloaded, list)
     assert len(manifest_contents.splitlines()) == len(downloaded)+1

@@ -1,6 +1,5 @@
 import functools, logging
 
-
 class log_with(object):
     '''Logging decorator that allows you to log with a
 specific logger.

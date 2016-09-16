@@ -18,7 +18,7 @@ from query_tcga.cache import requests_get
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 ## cache recquets depending on value of 
 cache.setup_cache()
@@ -37,26 +37,30 @@ def _compute_start_given_page(page, size):
 
 
 @log_with()
-def _get_num_pages(project_name, size, endpoint_name, n=None, data_category=None, query_args={}, verify=False):
+def _get_num_pages(project_name, endpoint_name, size=defaults.DEFAULT_SIZE,
+                 n=None, data_category=None, query_args={}, verify=False):
     """ Get total number of pages for given criteria
 
     >>> _get_num_pages('TCGA-BLCA', data_category=['Clinical'], size=5)
     83
 
     """
-    if n and size > n+1:
+    if n and size >= n:
         return 1
-    endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    params = _params.construct_parameters(project_name=project_name,
-                                   endpoint_name=endpoint_name,
-                                   size=size,
-                                   data_category=data_category,
-                                   query_args=query_args,
-                                   verify=verify,
-                                   )
-    response = requests_get(endpoint, params=params)
-    response.raise_for_status()
-    pages = response.json()['data']['pagination']['pages']
+    elif n and size:
+        return np.floor(n / size)+1
+    else:
+        endpoint = GDC_API_ENDPOINT.format(endpoint='files')
+        params = _params.construct_parameters(project_name=project_name,
+                                               endpoint_name=endpoint_name,
+                                               size=size,
+                                               data_category=data_category,
+                                               query_args=query_args,
+                                               verify=verify,
+                                               )
+        response = requests_get(endpoint, params=params)
+        response.raise_for_status()
+        pages = response.json()['data']['pagination']['pages']
     return pages
 
 
@@ -100,8 +104,8 @@ def get_manifest(project_name=None, n=None, data_category=None, query_args={}, v
     ## determine number of pages
     if not(pages):
         pages = _get_num_pages(project_name=project_name, endpoint_name='files',
-                             data_category=data_category, n=n,
-                             size=size, query_args=query_args, verify=verify)
+                               data_category=data_category, n=n,
+                               size=size, query_args=query_args, verify=verify)
     if n and pages == 1:
         size = n+1
 
@@ -132,7 +136,11 @@ def get_manifest_data(*args, **kwargs):
     """ Get manifest containing files to be downloaded, as a Pandas DataFrame.
         See `get_manifest` for more details.
     """
-    return pd.read_csv(io.StringIO(get_manifest(*args, **kwargs)), sep='\t')
+    manifest_contents = get_manifest(*args, **kwargs)
+    if manifest_contents != '':
+        return pd.read_csv(io.StringIO(), sep='\t')
+    else:
+        return None
 
 
 @log_with()
@@ -182,17 +190,60 @@ def _filter_manifest_updates(manifest_contents, data_dir, only_updates=True):
     return manifest_contents
 
 
-def _write_manifest_to_disk(manifest_contents, manifest_file,
-                             data_dir=defaults.GDC_DATA_DIR,
-                             only_updates=True):
+def _write_manifest_to_disk(manifest_contents, manifest_file):
     """ Write manifest content to disk, filtering for new updates by default
     """
-    _mkdir_if_not_exists(data_dir)
-    if only_updates:
-        manifest_contents = _filter_manifest_updates(manifest_contents, data_dir=data_dir)
     manifest_file.write(manifest_contents.encode())
     return True
     #logging.info('Manifest file written to: {}'.format(str(manifest_file)))
+
+
+def _truncate_manifest_contents(manifest_contents, n):
+    ## TODO truncate manifest contents
+    return manifest_contents
+
+@log_with()
+def download_from_manifest(manifest_file=None, manifest_contents=None,
+                            n=None,
+                            data_dir=defaults.GDC_DATA_DIR,
+                            only_updates=True,
+                            size=defaults.DEFAULT_SIZE,
+                            pages=None):
+
+    ## prep manifest contents per params
+    if manifest_file:
+        manifest_contents = _read_manifest(manifest_file)
+    elif isinstance(manifest_contents, pd.DataFrame):
+        raise ValueError('Downloading from manifest-data isn\'t currently supported.'+
+                    'Please pass in a manifest file or content')
+    elif not manifest_contents:
+        raise ValueError('Either manifest_file or manifest_content is required.')
+
+    if n:
+        manifest_contents = _truncate_manifest_contents(manifest_contents=manifest_contents, n=n)
+
+    all_manifest_contents = manifest_contents
+    if only_updates:
+        manifest_contents = _filter_manifest_updates(manifest_contents, data_dir=data_dir)
+
+    ## prepare to write manifest data to file
+    ## and execute gdc-client
+    manifest_file = tempfile.NamedTemporaryFile()
+    try:
+        # write manifest contents to disk
+        _write_manifest_to_disk(manifest_contents=manifest_contents,
+                                manifest_file=manifest_file)
+        manifest_file.flush()
+        # call gdc-client to download contents
+        # {gdc_client} download -m {manifest_file} -t {auth_token}
+        exe_bash = [defaults.GDC_CLIENT_PATH, 'download', '-m', manifest_file.name, '-t', defaults.GDC_TOKEN_PATH]
+        if subprocess.check_call(exe_bash, cwd=data_dir):
+            subprocess.call(exe_bash, cwd=data_dir)
+        # verify that all files in original manifest have been downloaded
+        downloaded = _verify_download(io.StringIO(all_manifest_contents), data_dir=data_dir)
+    finally:
+        manifest_file.close()
+    return downloaded
 
 
 @log_with()
@@ -233,7 +284,7 @@ def download_files(project_name, data_category, n=None,
                                                      only_updates=only_updates)
     ## exit if no files need to be updated
     if new_manifest_contents.strip() == '' or len(new_manifest_contents)==0:
-        return _verify_download(io.StringIO(manifest_contents), data_dir=data_dir)
+        return _verify_download(manifest_contents=manifest_contents, data_dir=data_dir)
 
     ## prepare to write manifest data to file
     ## and execute gdc-client
@@ -249,7 +300,7 @@ def download_files(project_name, data_category, n=None,
         if subprocess.check_call(exe_bash, cwd=data_dir):
             subprocess.call(exe_bash, cwd=data_dir)
         # verify that all files in original manifest have been downloaded
-        downloaded = _verify_download(io.StringIO(manifest_contents), data_dir=data_dir)
+        downloaded = _verify_download(manifest_contents=manifest_contents, data_dir=data_dir)
     finally:
         manifest_file.close()
     return downloaded
@@ -300,14 +351,15 @@ class FailedDownloadError(ValueError):
 
 
 @log_with()
-def _verify_download_single_file(row, data_dir=os.getcwd()):
+def _verify_download_single_file(row, data_dir):
     """ Verify that the file indicated in the manifest exists in data_dir
     """
     file_name = os.path.join(data_dir, row['id'], row['filename'])
     if not(os.path.exists(file_name)):
-        raise FailedDownloadError(file_name)
+        logging.warn('Some files were not found following download: {}'.format(file_name))
+        return file_name, False
     else:
-        return file_name
+        return file_name, True
 
 
 @log_with()
@@ -326,37 +378,39 @@ def _read_manifest(manifest_file=None, manifest_contents=None):
     return manifest_data
 
 
+
 @log_with()
-def _list_failed_downloads(manifest_file=None, manifest_contents=None, data_dir=os.getcwd()):
-    """
-    """
+def _characterize_downloads(data_dir, manifest_file=None, manifest_contents=None):
     manifest_data = _read_manifest(manifest_file=manifest_file, manifest_contents=manifest_contents)
     failed_downloads = list()
+    downloads = list()
     for i, row in manifest_data.iterrows():
-        try:
-            _verify_download_single_file(row, data_dir=data_dir)
-        except FailedDownloadError as e:
-             failed_downloads.append(str(e))
-    return failed_downloads    
+        file_name, success = _verify_download_single_file(row, data_dir=data_dir)
+        if success:
+            downloads.append(file_name)
+        else:
+            failed_downloads.append(file_name)
+    return {'failed': failed_downloads, 'success': downloads}
 
 
 @log_with()
-def _verify_download(manifest_file=None, manifest_contents=None, data_dir=defaults.GDC_DATA_DIR):
-    """ Verify that files listed in the manifest exist in data_dir
+def _list_failed_downloads(data_dir, manifest_file=None, manifest_contents=None):
     """
-    failed_downloads = list()
-    manifest_data = _read_manifest(manifest_file=manifest_file, manifest_contents=manifest_contents)
-    try:
-        downloaded = list(manifest_data.apply(lambda row:
-                        _verify_download_single_file(row, data_dir=data_dir),
-                        axis=1))
-    except FailedDownloadError as e:
-        failed_downloads.append(str(e))
-    if (len(failed_downloads)>0):
-        ## TODO handle failed downloads
-        raise ValueError("Some files failed to download:\n\t{}:".format('\n\t'.join(failed_downloads)))
-    return downloaded
+    """
+    res = _characterize_downloads(manifest_file=manifest_file,
+                                  manifest_contents=manifest_contents,
+                                  data_dir=data_dir)
+    return res['failed']
 
+
+@log_with()
+def _verify_download(data_dir, manifest_file=None, manifest_contents=None):
+    """
+    """
+    res = _characterize_downloads(manifest_file=manifest_file,
+                                  manifest_contents=manifest_contents,
+                                  data_dir=data_dir)
+    return res['success']
 
 
 #### ---- transform downloaded files to Cohorts-friendly format ----
@@ -421,14 +475,16 @@ def _parse_clin_data_soup(soup, **kwargs):
 
 @log_with()
 def get_clinical_data_from_file(xml_file, **kwargs):
-    metadata = get_manifest_data(data_category='Clinical')
     soup = _read_xml_bs(xml_file)
     data = _parse_clin_data_soup(soup, **kwargs)
     data['_source_type'] = 'XML'
     data['_source_desc'] = xml_file
     data['patient_id'] = soup.findChild('patient_id').text
     data['file_uuid'] = soup.findChild('file_uuid').text
-    data['case_uuid'] = metadata.loc[metadata['filename']==os.basename(xml_file),'id'].str
+    metadata = get_manifest_data(query_args={'file_id': data['file_uuid']}, 
+                                      data_category='Clinical')
+    if metadata:
+        data['case_uuid'] = metadata.loc[metadata['filename']==os.path.basename(xml_file),'id'].str
     return data
 
 

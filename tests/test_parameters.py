@@ -29,12 +29,13 @@ def test_construct_parameters():
     assert list(res.keys()).sort() == ['filters','size'].sort()
 
 
-@pytest.mark.xfail
-def test_construct_parameters_with_from():
-    res = parameters.construct_parameters(from=2)
-    assert res == dict(from=2)
+def test_construct_parameters_with_args():
+    ## minimal testing because dictionary (which is converted to string) 
+    ## isn't always in same order. *could* sort the dict, but prob isn't necessary
+    res = parameters.construct_parameters(query_args={'file_id': 'XXXX'}, size=5, endpoint_name='files')
+    assert list(res.keys()).sort() == ['filters','size'].sort()
 
-	
+
 def test_list_valid_fields():
     expected = ['files.access', 'files.acl', 'files.analysis.analysis_id']
     res = list(parameters._list_valid_fields(endpoint_name='files'))

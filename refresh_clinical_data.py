@@ -5,6 +5,6 @@ def refresh_clin_data(project_name, filename):
 	clin.to_csv(filename, sep='|', index=False)
 
 if __name__ == '__main__':
-	refresh_clin_data('TCGA-BLCA', filename='data/clinical.csv')
+	refresh_clin_data(project_name='TCGA-BLCA', filename='data/clinical.csv')
 	print("Clinical data written to {}".format('data/clinical.csv'))
 

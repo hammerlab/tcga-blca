@@ -23,6 +23,7 @@ def setup_cache():
 		import requests_cache
 		requests_cache.install_cache(cache_name='github_cache', backend='sqlite', expire_after=180)
 
+
 @RateLimited(2)
 def requests_get(*args, **kwargs):
 	return requests.get(*args, **kwargs)

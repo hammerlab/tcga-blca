@@ -3,7 +3,7 @@ from query_tcga import query_tcga as qt
 #### ---- download other files ----
 
 @qt.log_with()
-def download_wxs_files(project_name, query_args={}, **kwargs):
+def download_wxs_files(project_name, query_args={}, dry_run=False, **kwargs):
     """ Download sequencing files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -23,8 +23,12 @@ def download_wxs_files(project_name, query_args={}, **kwargs):
 
     """
     query_args.update(dict(experimental_strategy='WXS'))
-    files = qt.download_files(project_name=project_name, data_category=['Raw Sequencing Data'],
-             query_args=query_args, **kwargs)
+    if dry_run:
+        files = qt.get_manifest_data(project_name=project_name, data_category=['Raw Sequencing Data'],
+                 query_args=query_args, **kwargs)
+    else:
+        files = qt.download_files(project_name=project_name, data_category=['Raw Sequencing Data'],
+                 query_args=query_args, **kwargs)
     return files
 
 
@@ -67,3 +71,14 @@ def download_vcf_files(project_name, data_format='VCF', workflow_type='SomaticSn
              query_args=query_args,
              **kwargs)
     return files
+
+
+def _summarize_single_vcf_file(filepath):
+    """ Summarize meta-data from a single VCF file
+    """
+    return True
+
+def summarize_vcf_files(files):
+    """ Sumarize meta-data from each of the VCF files listed in `files`.
+    """
+    return True

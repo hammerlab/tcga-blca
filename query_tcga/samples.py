@@ -1,4 +1,6 @@
 from query_tcga import query_tcga as qt
+import varcode
+import pandas as pd
 
 #### ---- download other files ----
 
@@ -76,9 +78,14 @@ def download_vcf_files(project_name, data_format='VCF', workflow_type='SomaticSn
 def _summarize_single_vcf_file(filepath):
     """ Summarize meta-data from a single VCF file
     """
-    return True
+    vcf = varcode.vcf.load_vcf(filepath, max_variants=1)
+    summary = dict(filepath=filepath, reference_name=vcf[0].reference_name)
+    return summary
+
 
 def summarize_vcf_files(files):
     """ Sumarize meta-data from each of the VCF files listed in `files`.
     """
-    return True
+    dflist = list()
+    [dflist.append(_summarize_single_vcf_file(file)) for file in files]
+    return pd.DataFrame(dflist)

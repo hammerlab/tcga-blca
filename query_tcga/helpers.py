@@ -1,14 +1,16 @@
 
 from query_tcga.log_with import log_with
+import pandas as pd
+import os 
 
 @log_with()
-def _compute_start_given_page(page, size):
+def compute_start_given_page(page, size):
     """ compute start / from position given page & size
     """
     return (page*size+1)
 
 @log_with()
-def _convert_to_list(x):
+def convert_to_list(x):
     """ Convert x to a list if not already a list
 
     Examples
@@ -22,7 +24,9 @@ def _convert_to_list(x):
     ['Clinical', 'Biospecimen']
 
     """
-    if not(x):
+    if isinstance(x, pd.Series):
+        return(list(x))
+    elif not(x):
         return(None)
     elif isinstance(x, list):
         return(x)
@@ -30,3 +34,8 @@ def _convert_to_list(x):
         return([x])
     else:
         return(list(x))
+
+@log_with()
+def convert_to_file_id(file_paths):
+    ## merge in file_source to get meta-data for the file
+    return [os.path.split(os.path.dirname(f))[1] for f in convert_to_list(file_paths)]

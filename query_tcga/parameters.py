@@ -5,7 +5,7 @@ from query_tcga import defaults
 from query_tcga.defaults import GDC_API_ENDPOINT
 from query_tcga import error_handling as _errors
 from query_tcga.cache import requests_get
-from query_tcga.helpers import _convert_to_list
+from query_tcga import helpers # import _convert_to_list
 
 #### ---- tools for constructing parameters ---- 
 @log_with()
@@ -16,7 +16,7 @@ def _construct_filter_element(field, value, op='in', verify=False):
     """
     field_name = field
     endpoint_name = field.split('.')[0]
-    field_value = _convert_to_list(value)
+    field_value = helpers.convert_to_list(value)
     if verify:
         _verify_field_values(data_list=field_value, field_name=field_name, endpoint_name=endpoint_name)
     filt = {"op": op,
@@ -192,7 +192,7 @@ def _verify_data_list(data_list, allowed_values, message='At least one value giv
     >>> _verify_data_list(['Clinical'], allowed_values=_list_valid_options('data_category'))
     True
     """
-    data_list = _convert_to_list(data_list)
+    data_list = helpers.convert_to_list(data_list)
     if not(all(el in allowed_values for el in data_list)):
         ## identify invalid categories for informative error message
         bad_values = list()

@@ -95,8 +95,11 @@ def get_fileinfo_data(file_id, fields=defaults.DEFAULT_FILE_FIELDS, chunk_size=1
         hit_data = dict()
         for (k, v) in hit.items():
             if k == 'cases':
-                hit_data['case_id'] = hit['cases'][0]['case_id']
-                hit_data['submitter_id'] = hit['cases'][0]['submitter_id']
+                for (subkey, subval) in hit['cases'][0].items():
+                  hit_data[subkey] = subval
+            elif k == 'analysis':
+                for (subkey, subval) in hit['analysis'].items():
+                  hit_data[subkey] = subval
             else:
                 hit_data[k] = v
         df.append(hit_data)
@@ -109,7 +112,8 @@ def _describe_samples(case_ids,
                       data_category,
                       query_args={},
                       **kwargs):
-    
+    """ Helper function to describe sample files
+    """
     for case_id in helpers.convert_to_list(case_ids):
         sample_df = list()
         samples = get_data(endpoint='cases',

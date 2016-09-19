@@ -22,13 +22,14 @@ def download_wxs_files(project_name, query_args={}, **kwargs):
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 
     """
+    query_args.update(dict(experimental_strategy='WXS'))
     files = qt.download_files(project_name=project_name, data_category=['Raw Sequencing Data'],
-             query_args=query_args.update(dict(experimental_strategy='WXS')), **kwargs)
+             query_args=query_args, **kwargs)
     return files
 
 
 @qt.log_with()
-def download_vcf_files(project_name, data_format='VCF', query_args={}, **kwargs):
+def download_vcf_files(project_name, data_format='VCF', workflow_type='SomaticSniper', data_type='Raw Simple Somatic Mutation', query_args={}, dry_run=False, **kwargs):
     """ Download VCF files for this project to the DATA_DIR directory
         1. Query API to get manifest file containing all files matching criteria
         2. Use gdc-client to download files to current working directory
@@ -47,7 +48,22 @@ def download_vcf_files(project_name, data_format='VCF', query_args={}, **kwargs)
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 
     """
-    files = qt.download_files(project_name=project_name, data_category=['Simple Nucleotide Variation'],
-             query_args=query_args.update(dict(data_format=data_format)), **kwargs)
-
+    if data_format:
+      query_args.update({'files.data_format': data_format})
+    if data_type:
+      query_args.update({'files.data_type': data_type})
+    if workflow_type:
+      query_args.update({'files.analysis.workflow_type': workflow_type})
+    if (dry_run):
+      files = qt.get_manifest_data(
+             project_name=project_name,
+             data_category=['Simple Nucleotide Variation'],
+             query_args=query_args,
+             **kwargs)
+    else :
+      files = qt.download_files(
+             project_name=project_name,
+             data_category=['Simple Nucleotide Variation'],
+             query_args=query_args,
+             **kwargs)
     return files

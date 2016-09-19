@@ -1,8 +1,8 @@
-
+from query_tcga import query_tcga as qt
 
 #### ---- download other files ----
 
-@log_with()
+@qt.log_with()
 def download_wxs_files(project_name, query_args={}, **kwargs):
     """ Download sequencing files for this project to the current working directory
         1. Query API to get manifest file containing all files matching criteria
@@ -22,13 +22,12 @@ def download_wxs_files(project_name, query_args={}, **kwargs):
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 
     """
-    files = download_files(project_name=project_name, data_category=['Raw Sequencing Data'],
+    files = qt.download_files(project_name=project_name, data_category=['Raw Sequencing Data'],
              query_args=query_args.update(dict(experimental_strategy='WXS')), **kwargs)
-
     return files
 
 
-@log_with()
+@qt.log_with()
 def download_vcf_files(project_name, data_format='VCF', query_args={}, **kwargs):
     """ Download VCF files for this project to the DATA_DIR directory
         1. Query API to get manifest file containing all files matching criteria
@@ -48,7 +47,7 @@ def download_vcf_files(project_name, data_format='VCF', query_args={}, **kwargs)
       max_pages (int, optional): how many pages of records to download (default: all, by specifying value of None)
 
     """
-    files = download_files(project_name=project_name, data_category=['Simple Nucleotide Variation'],
+    files = qt.download_files(project_name=project_name, data_category=['Simple Nucleotide Variation'],
              query_args=query_args.update(dict(data_format=data_format)), **kwargs)
 
     return files

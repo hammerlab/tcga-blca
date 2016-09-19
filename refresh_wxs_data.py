@@ -1,7 +1,7 @@
-from query_tcga import query_tcga as qt
+from query_tcga import samples
 
 def refresh_wxs_data(project_name):
-	qt.download_wxs_data(project_name=project_name, data_dir='data/gdc')
+	samples.download_wxs_files(project_name=project_name, data_dir='data/gdc')
 
 if __name__ == '__main__':
 	refresh_wxs_data('TCGA-BLCA')

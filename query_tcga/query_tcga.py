@@ -466,7 +466,7 @@ def get_clinical_data_from_file(xml_file, **kwargs):
     data['patient_id'] = soup.findChild('patient_id').text
     data['_source_file_uuid'] = file_id
     ## get file meta-data (for case_id):
-    data['case_id'] = api.get_fileinfo_data(file_id=file_id)['case_id']
+    data['case_id'] = api.get_fileinfo_data(file_id=file_id)['case_id'][0]
     return data
 
 

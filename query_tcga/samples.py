@@ -2,7 +2,6 @@ from query_tcga import query_tcga as qt
 import varcode
 import pandas as pd
 from query_tcga import helpers, api
-import os
 
 #### ---- download other files ----
 
@@ -57,23 +56,24 @@ def download_vcf_files(project_name, data_format='VCF', workflow_type='SomaticSn
 
     """
     if data_format:
-      query_args.update({'files.data_format': data_format})
+        query_args.update({'files.data_format': data_format})
     if data_type:
-      query_args.update({'files.data_type': data_type})
+        query_args.update({'files.data_type': data_type})
     if workflow_type:
-      query_args.update({'files.analysis.workflow_type': workflow_type})
+        query_args.update({'files.analysis.workflow_type': workflow_type})
     if (dry_run):
-      files = qt.get_manifest_data(
+        files = qt.get_manifest_data(
              project_name=project_name,
              data_category=['Simple Nucleotide Variation'],
              query_args=query_args,
              **kwargs)
     else :
-      files = qt.download_files(
+        files = qt.download_files(
              project_name=project_name,
              data_category=['Simple Nucleotide Variation'],
              query_args=query_args,
              **kwargs)
+        files.fileinfo = summarize_vcf_files(files)
     return files
 
 
@@ -97,4 +97,12 @@ def summarize_vcf_files(files):
         fileinfo = api.get_fileinfo_data(files)
     summary = pd.merge(file_summary, fileinfo, on='file_id')
     return summary
+
+
+def summarize_wxs_files(files):
+    if hasattr(files, 'fileinfo'):
+        fileinfo = files.fileinfo
+    else:
+        fileinfo = api.get_fileinfo_data(files)
+    return fileinfo
 

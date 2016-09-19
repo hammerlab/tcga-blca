@@ -1,4 +1,5 @@
 from query_tcga import parameters
+from query_tcga import helpers
 import pytest
 import shutil
 import pandas as pd
@@ -17,9 +18,9 @@ def test_construct_filter_parameters():
 
 
 def test_convert_to_list():
-    assert parameters._convert_to_list('Clinical') == ['Clinical']
-    assert parameters._convert_to_list(['Clinical']) == ['Clinical']
-    assert parameters._convert_to_list(('Clinical','Biospecimen')) == ['Clinical', 'Biospecimen']
+    assert helpers.convert_to_list('Clinical') == ['Clinical']
+    assert helpers.convert_to_list(['Clinical']) == ['Clinical']
+    assert helpers.convert_to_list(('Clinical','Biospecimen')) == ['Clinical', 'Biospecimen']
 
 
 def test_construct_parameters():

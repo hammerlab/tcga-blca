@@ -12,7 +12,9 @@ from query_tcga.defaults import GDC_API_ENDPOINT
 from query_tcga import parameters as _params
 from query_tcga import cache
 from query_tcga.cache import requests_get
-from query_tcga.helpers import _compute_start_given_page
+from query_tcga import helpers # import _compute_start_given_page, _convert
+from query_tcga import api
+from query_tcga.super_list import L
 
 ## cache recquets depending on value of 
 cache.setup_cache()
@@ -62,7 +64,7 @@ def _get_manifest_once(project_name, size=defaults.DEFAULT_SIZE, page=0,
     <Response [200]>
     """
     endpoint = GDC_API_ENDPOINT.format(endpoint='files')
-    from_param = _compute_start_given_page(page=page, size=size)
+    from_param = helpers.compute_start_given_page(page=page, size=size)
     params = _params.construct_parameters(project_name=project_name,
                                        size=size,
                                        data_category=data_category,
@@ -289,16 +291,12 @@ def download_files(project_name, data_category, n=None,
         if subprocess.check_call(exe_bash, cwd=data_dir):
             subprocess.call(exe_bash, cwd=data_dir)
         # verify that all files in original manifest have been downloaded
-        downloaded = _verify_download(manifest_contents=manifest_contents, data_dir=data_dir)
+        downloaded = L(_verify_download(manifest_contents=manifest_contents, data_dir=data_dir))
     finally:
         manifest_file.close()
+    fileinfo = api.get_fileinfo_data(file_id=helpers.convert_to_file_id(downloaded))
+    downloaded.fileinfo = fileinfo ## set attribute on returned list
     return downloaded
-
-
-@log_with()
-def _convert_to_file_id(file_paths):
-    ## merge in file_source to get meta-data for the file
-    return [os.path.splitext(f)[0] for f in file_paths]
 
 
 @log_with()
@@ -462,10 +460,13 @@ def _parse_clin_data_soup(soup, **kwargs):
 def get_clinical_data_from_file(xml_file, **kwargs):
     soup = _read_xml_bs(xml_file)
     data = _parse_clin_data_soup(soup, **kwargs)
+    file_id = helpers.convert_to_file_id(xml_file)
     data['_source_type'] = 'XML'
     data['_source_desc'] = xml_file
     data['patient_id'] = soup.findChild('patient_id').text
-    data['_source_file_uuid'] = os.path.split(os.path.dirname(data['_source_desc'][0]))[1]
+    data['_source_file_uuid'] = file_id
+    ## get file meta-data (for case_id):
+    data['case_id'] = api.get_fileinfo_data(file_id=file_id)['case_id']
     return data
 
 

@@ -1,6 +1,8 @@
 from query_tcga import query_tcga as qt
 import varcode
 import pandas as pd
+from query_tcga import helpers, api
+import os
 
 #### ---- download other files ----
 
@@ -79,7 +81,7 @@ def _summarize_single_vcf_file(filepath):
     """ Summarize meta-data from a single VCF file
     """
     vcf = varcode.vcf.load_vcf(filepath, max_variants=1)
-    summary = dict(filepath=filepath, reference_name=vcf[0].reference_name)
+    summary = dict(filepath=filepath, reference_name=vcf[0].reference_name, file_id=helpers.convert_to_file_id(filepath)[0])
     return summary
 
 
@@ -88,4 +90,11 @@ def summarize_vcf_files(files):
     """
     dflist = list()
     [dflist.append(_summarize_single_vcf_file(file)) for file in files]
-    return pd.DataFrame(dflist)
+    file_summary = pd.DataFrame(dflist)
+    if hasattr(files, 'fileinfo'):
+        fileinfo = files.fileinfo
+    else:
+        fileinfo = api.get_fileinfo_data(files)
+    summary = pd.merge(file_summary, fileinfo, on='file_id')
+    return summary
+

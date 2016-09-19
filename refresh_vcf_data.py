@@ -1,7 +1,17 @@
 from query_tcga import samples
+import numpy as np
+import logging
 
 def refresh_vcf_data(project_name):
-	samples.download_vcf_files(project_name=project_name, data_dir='data/gdc')
+	vcf_files = samples.download_vcf_files(project_name=project_name, data_dir='data/gdc')
+	vcf_file_summary = samples.summarize_vcf_files(vcf_files)
+	reference_names = np.unique(vcf_file_summary['reference_name'])
+	if len(reference_names)==1:
+		logging.info('All VCFs have reference genome: {}'.format(reference_names[0]))
+	else:
+		reference_summary = vcf_file_summary.groupby('reference_name').agg(len)
+		logging.warn('Not all VCFs have the same inferred reference! \n {}'.format(reference_summary))
+
 
 if __name__ == '__main__':
 	refresh_vcf_data('TCGA-BLCA')

@@ -2,9 +2,12 @@ from query_tcga import samples
 import numpy as np
 import logging
 
-def refresh_vcf_data(project_name):
-	vcf_files = samples.download_vcf_files(project_name=project_name, data_dir='data/gdc')
-	vcf_file_summary = samples.summarize_vcf_files(vcf_files)
+def refresh_vcf_data(project_name, data_dir):
+	vcf_files = samples.download_vcf_files(project_name=project_name, data_dir=data_dir)
+	logging.info("VCF data downloaded to {}".format(data_dir))
+
+	## check for non-uniqueness in reference names
+	vcf_file_summary = vcf_files.fileinfo
 	reference_names = np.unique(vcf_file_summary['reference_name'])
 	if len(reference_names)==1:
 		logging.info('All VCFs have reference genome: {}'.format(reference_names[0]))
@@ -14,5 +17,4 @@ def refresh_vcf_data(project_name):
 
 
 if __name__ == '__main__':
-	refresh_vcf_data('TCGA-BLCA')
-	print("VCF data downloaded to {}".format('/data/gdc'))
+	refresh_vcf_data('TCGA-BLCA', data_dir='data/gdc')

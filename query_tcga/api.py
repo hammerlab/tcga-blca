@@ -83,7 +83,7 @@ def get_fileinfo(file_id, fields=defaults.DEFAULT_FILE_FIELDS, format=None):
         return response
 
 
-def get_fileinfo_data(file_id, fields=defaults.DEFAULT_FILE_FIELDS, chunk_size=10):
+def get_fileinfo_data(file_id, fields=defaults.DEFAULT_FILE_FIELDS, chunk_size=defaults.DEFAULT_CHUNK_SIZE):
     file_id = helpers.convert_to_list(file_id)
     if len(file_id)>chunk_size:
         chunks = [file_id[x:x+chunk_size] for x in range(0, len(file_id), chunk_size)]

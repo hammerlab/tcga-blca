@@ -457,7 +457,7 @@ def _parse_clin_data_soup(soup, **kwargs):
 
 
 @log_with()
-def get_clinical_data_from_file(xml_file, **kwargs):
+def get_clinical_data_from_file(xml_file, fileinfo=None, **kwargs):
     soup = _read_xml_bs(xml_file)
     data = _parse_clin_data_soup(soup, **kwargs)
     file_id = helpers.convert_to_file_id(xml_file)
@@ -466,7 +466,10 @@ def get_clinical_data_from_file(xml_file, **kwargs):
     data['patient_id'] = soup.findChild('patient_id').text
     data['_source_file_uuid'] = file_id
     ## get file meta-data (for case_id):
-    data['case_id'] = api.get_fileinfo_data(file_id=file_id)['case_id'][0]
+    if not fileinfo:
+        data['case_id'] = api.get_fileinfo_data(file_id=file_id)['case_id'][0]
+    else:
+        data['case_id'] = fileinfo.loc[fileinfo['file_id']==file_id,'case_id']
     return data
 
 
@@ -475,7 +478,7 @@ def get_clinical_data(project_name, **kwargs):
     xml_files = download_clinical_files(project_name=project_name, **kwargs)
     data = list()
     for xml_file in xml_files:
-        data.append(get_clinical_data_from_file(xml_file))
+        data.append(get_clinical_data_from_file(xml_file, fileinfo=xml_files.fileinfo))
     df = pd.DataFrame(data)
     return df
 

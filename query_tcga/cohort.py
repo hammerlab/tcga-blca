@@ -1,7 +1,9 @@
 import cohorts
 from query_tcga import query_tcga as qt
 from query_tcga import samples
+from query_tcga import defaults
 import numpy as np
+import pandas as pd
 
 def prep_patient_data(row, snv_vcf_paths = None, **kwargs):
     patient_id = row['case_id']
@@ -9,10 +11,7 @@ def prep_patient_data(row, snv_vcf_paths = None, **kwargs):
     progressed = row['treatment_outcome_at_tcga_followup'] != 'Complete Response'
     censor_time = float(row['last_contact_days_to'])
     deceased_time = float(row['death_days_to'])
-    progressed_time = min(float(row['new_tumor_event_dx_days_to']),
-                         float(row['new_tumor_event_surgery_days_to']),
-                         float(row['new_tumor_event_surgery_days_to_met']),
-                         )
+    progressed_time = float(row['new_tumor_event_dx_days_to'])
 
     row['progressed_time'] = progressed_time
     row['deceased_time'] = deceased_time
@@ -63,15 +62,17 @@ def prep_patient_data(row, snv_vcf_paths = None, **kwargs):
     return(patient)
 
 
-def build_cohort(project_name, **kwargs):
+def build_cohort(project_name, include_vcfs=True, **kwargs):
 
     clin = qt.get_clinical_data(project_name=project_name, **kwargs)
-    vcfs = samples.download_vcf_files(project_name, **kwargs)
-    vcf_info = vcfs.fileinfo
 
     patients = []
     for (i, row) in clin.iterrows():
-        patients.append(prep_patient_data(row, snv_vcf_paths=vcf_info.loc[vcf_info['case_id']==row['case_id'], 'filepath']))
+        if include_vcfs:
+            vcf_files = samples.download_vcf_files(query_args={'cases.case_id': row['case_id']}, project_name=project_name)
+            patients.append(prep_patient_data(row, snv_vcf_paths=vcf_files))
+        else:
+            patients.append(prep_patient_data(row))
 
     cohort = cohorts.Cohort(
             patients=patients,

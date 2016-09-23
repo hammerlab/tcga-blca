@@ -1,8 +1,9 @@
 import cohorts
 from query_tcga import query_tcga as qt
+from query_tcga import samples
 import numpy as np
 
-def prep_patient_data(row):
+def prep_patient_data(row, snv_vcf_paths = None, **kwargs):
     patient_id = row['case_id']
     deceased = row['vital_status'] != 'Alive'
     progressed = row['treatment_outcome_at_tcga_followup'] != 'Complete Response'
@@ -57,6 +58,7 @@ def prep_patient_data(row):
         pfs=pfs,
         benefit=benefit,
         additional_data=row,
+        snv_vcf_paths = snv_vcf_paths,
     )
     return(patient)
 
@@ -64,11 +66,12 @@ def prep_patient_data(row):
 def build_cohort(project_name, **kwargs):
 
     clin = qt.get_clinical_data(project_name=project_name, **kwargs)
-
+    vcfs = samples.download_vcf_files(project_name, **kwargs)
+    vcf_info = vcfs.fileinfo
 
     patients = []
     for (i, row) in clin.iterrows():
-        patients.append(prep_patient_data(row))
+        patients.append(prep_patient_data(row, snv_vcf_paths=vcf_info.loc[vcf_info['case_id']==row['case_id'], 'filepath']))
 
     cohort = cohorts.Cohort(
             patients=patients,

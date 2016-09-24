@@ -472,6 +472,16 @@ def get_clinical_data_from_file(xml_file, fileinfo=None, **kwargs):
         data['case_id'] = api.get_fileinfo_data(file_id=file_id)['case_id'][0]
     return data
 
+def _convert_to_categorical(series, max_groups=5):
+    """ Convert the series to categorical, if number of distinct groups <= `max_groups`
+    """
+    if type(series) is not chr:
+        return series
+    if len(series.value_counts(dropna=True)) <= max_groups:
+        return series.astype('category')
+    else:
+        return series
+
 
 @log_with()
 def get_clinical_data(project_name, **kwargs):
@@ -480,5 +490,9 @@ def get_clinical_data(project_name, **kwargs):
     for xml_file in xml_files:
         data.append(get_clinical_data_from_file(xml_file, fileinfo=xml_files.fileinfo))
     df = pd.DataFrame(data)
+    ## convert numerical fields to numeric
+    df = df.apply(pd.to_numeric, errors='ignore')
+    ## convert rest of fields to categories, if n_groups <= 5
+    df = df.apply(_convert_to_categorical)
     return df
 

@@ -18,7 +18,9 @@ There are a few steps you will have to follow before using this code.
       2. Download the [authentication token](https://gdc-portal.nci.nih.gov/)
       3. Edit the variable `GDC_TOKEN_PATH` in `config.ini`
 
-Once you have these items set up, you can run one or both of the `refresh_*.py` scripts to fetch data from the GDC portal. Then, the various *.ipynbs in the repo will demonstrate how to use Cohorts to analyze data like these.
+Once you have these items set up, you can run one or both of the `refresh_*.py` scripts to fetch data from the GDC portal. 
+
+Then, you can try out the various *.ipynbs in the repo for yourself, or use them as a starting point for further analysis.
 
 # query_tcga
 
@@ -26,7 +28,7 @@ The `refresh_*.py` scripts make use of the [query_tcga](http://github.com/jburos
 
 Instead, you will want to install as follows:
 
-   pip install git+git://github.com/jburos/query_tcga
+    pip install git+git://github.com/jburos/query_tcga
 
 This code will eventually be merged into the cleaner [pygdc](http://github.com/hammerlab/pygdc) package. For now, the merge of these codebases is a WIP.
 

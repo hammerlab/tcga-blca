@@ -7,3 +7,4 @@ data
 *.pyc
 data-cache*
 gdc_cache.sqlite
+config.ini

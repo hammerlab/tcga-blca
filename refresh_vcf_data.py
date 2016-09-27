@@ -1,8 +1,12 @@
-from query_tcga import samples
+from query_tcga import samples, config
 import numpy as np
 import logging
 
-def refresh_vcf_data(project_name, data_dir):
+config.set_value(USE_CACHE=True)
+config.set_value(GDC_TOKEN_PATH='/Users/jacquelineburos/Downloads/gdc-user-token.2016-09-26T12-23-27-04-00.txt')
+logging.basicConfig(level=logging.DEBUG)
+
+def refresh_vcf_data(project_name, data_dir, filename):
 	vcf_files = samples.download_vcf_files(project_name=project_name, data_dir=data_dir)
 	logging.info("VCF data downloaded to {}".format(data_dir))
 
@@ -14,7 +18,9 @@ def refresh_vcf_data(project_name, data_dir):
 	else:
 		reference_summary = vcf_file_summary.groupby('reference_name').agg(len)
 		logging.warn('Not all VCFs have the same inferred reference! \n {}'.format(reference_summary))
+	vcf_file_summary.to_csv(filename, sep='|', index=False)
+	print("VCF fileinfo written to {file} for project {project}".format(file=filename, project=project_name))
 
 
 if __name__ == '__main__':
-	refresh_vcf_data('TCGA-BLCA', data_dir='data/gdc')
+	refresh_vcf_data('TCGA-BLCA', data_dir='data/gdc', filename='data/vcf_fileinfo.csv')

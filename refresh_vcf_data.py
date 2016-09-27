@@ -2,8 +2,7 @@ from query_tcga import samples, config
 import numpy as np
 import logging
 
-config.set_value(USE_CACHE=True)
-config.set_value(GDC_TOKEN_PATH='/Users/jacquelineburos/Downloads/gdc-user-token.2016-09-26T12-23-27-04-00.txt')
+config.load_config('config.ini')
 logging.basicConfig(level=logging.DEBUG)
 
 def refresh_vcf_data(project_name, data_dir, filename):

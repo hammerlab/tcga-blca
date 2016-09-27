@@ -3,3 +3,8 @@ __pycache__
 .cache
 tests/test_data
 data
+.ipynb_checkpoints
+*.pyc
+data-cache*
+gdc_cache.sqlite
+config.ini

@@ -5,4 +5,5 @@ tests/test_data
 data
 .ipynb_checkpoints
 *.pyc
-data-cache
+data-cache*
+gdc_cache.sqlite
